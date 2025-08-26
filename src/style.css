@@ -1,0 +1,14 @@
+body {
+  background-color: black;
+  color: #00ff00;
+  font-family: "Courier New", monospace;
+  margin: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+}
+
+.app {
+  text-align: center;
+}
