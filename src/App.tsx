@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import { ReactFlow, applyNodeChanges, applyEdgeChanges, addEdge } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { TextUpdaterNode } from './nodes/TextUpdaterNode';
+import usePaneClickCombo from "./hooks/usePaneClickCombo";
 
 const nodeTypes = {
   textUpdater: TextUpdaterNode,
@@ -27,6 +28,7 @@ export default function App() {
   const [nodes, setNodes] = useState(initialNodes);
   const [edges, setEdges] = useState(initialEdges);
 
+  
   const onNodesChange = useCallback(
     (changes) => setNodes((nodesSnapshot) => applyNodeChanges(changes, nodesSnapshot)),
     [],
@@ -39,9 +41,15 @@ export default function App() {
     (params) => setEdges((edgesSnapshot) => addEdge(params, edgesSnapshot)),
     [],
   );
-  const onPaneClick = (event: React.MouseEvent) => {
-    console.log("clicou fora dos nodes", event.clientX, event.clientY);
-  };
+  const onPaneClick = usePaneClickCombo({
+    onSingle: (e) => {
+      console.log("clicou fora dos nodes", e.clientX, e.clientY);
+    },
+    onDouble: (e) => {
+      console.log("duplo clique no pane", e.clientX, e.clientY);
+    },
+  });
+  
 
   return (
     <>
