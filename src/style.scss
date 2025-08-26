@@ -1,3 +1,5 @@
+@use "sass:color";
+
 // src/style.scss
 $font: "Courier New", monospace;
 $green: #00ff88; // neon
@@ -8,6 +10,7 @@ $bg-panel: #0b0f0c;
 $text: #c8ffdf;
 $grid: rgba(0, 255, 136, 0.06);
 $shadow-neon: 0 0 12px rgba(0, 255, 136, 0.5), 0 0 32px rgba(0, 255, 136, 0.25);
+$green-border: color.adjust($green, $lightness: -40%);
 
 // Dimensões
 $radius: 16px;
@@ -66,7 +69,7 @@ body {
   width: 5px;
   height: 5px;
   background: $green;
-  border: 1px solid darken($green, 40%);
+  border: 1px solid $green-border;
   border-radius: 50%;
   box-shadow: $shadow-neon;
 }
