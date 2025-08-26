@@ -2,6 +2,7 @@
 $font: "Courier New", monospace;
 $green: #00ff88; // neon
 $green-soft: #00d47a;
+$edge-green: #00ff00;
 $bg: #050505; // quase preto
 $bg-panel: #0b0f0c;
 $text: #c8ffdf;
@@ -48,4 +49,32 @@ body {
  
 .light .react-flow__node {
   
+}
+
+.react-flow__edge-path {
+  stroke: $edge-green !important;
+  stroke-width: 2px !important;
+  filter: drop-shadow(0 0 8px rgba(0,255,136,0.6));
+}
+
+.react-flow__edge-text {
+  fill: $edge-green !important;
+  font-family: "Courier New", monospace;
+}
+
+.react-flow__handle {
+  width: 5px;
+  height: 5px;
+  background: $green;
+  border: 1px solid darken($green, 40%);
+  border-radius: 50%;
+  box-shadow: $shadow-neon;
+}
+
+.react-flow__handle-left {
+  background: $green-soft;
+}
+
+.react-flow__handle-right {
+  background: $green;
 }
