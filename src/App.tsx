@@ -39,6 +39,9 @@ export default function App() {
     (params) => setEdges((edgesSnapshot) => addEdge(params, edgesSnapshot)),
     [],
   );
+  const onPaneClick = (event: React.MouseEvent) => {
+    console.log("clicou fora dos nodes", event.clientX, event.clientY);
+  };
 
   return (
     <>
@@ -55,6 +58,7 @@ export default function App() {
             edges={edges}
             nodeTypes={nodeTypes}
             onNodesChange={onNodesChange}
+            onPaneClick={onPaneClick}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
             fitView
