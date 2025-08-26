@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { ReactFlow, applyNodeChanges, applyEdgeChanges, addEdge } from '@xyflow/react';
+import { ReactFlow, applyNodeChanges, applyEdgeChanges, addEdge, Panel } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { TextUpdaterNode } from './nodes/TextUpdaterNode';
 import usePaneClickCombo from "./hooks/usePaneClickCombo";
@@ -27,6 +27,7 @@ const initialEdges = [{ id: 'n1-n2', source: 'n1', target: 'n2' }];
 export default function App() {
   const [nodes, setNodes] = useState(initialNodes);
   const [edges, setEdges] = useState(initialEdges);
+  const [panelPos, setPanelPos] = useState<{ x: number; y: number } | null>(null);
 
   
   const onNodesChange = useCallback(
@@ -47,6 +48,7 @@ export default function App() {
     },
     onDouble: (e) => {
       console.log("duplo clique no pane", e.clientX, e.clientY);
+      setPanelPos({ x: e.clientX, y: e.clientY })
     },
   });
   
@@ -70,7 +72,16 @@ export default function App() {
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
             fitView
-          />
+          >
+            {panelPos && (
+        <Panel style={{ left: panelPos.x, top: panelPos.y, position: 'absolute' }}>
+          <div className="hacker-panel">
+            <p>⚡ Painel Hacker</p>
+            <button onClick={() => setPanelPos(null)}>Fechar</button>
+          </div>
+        </Panel>
+      )}
+          </ReactFlow>
         </div>
 
     </div>
