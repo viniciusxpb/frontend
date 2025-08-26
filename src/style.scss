@@ -1,7 +1,25 @@
 // src/style.scss
-$bg: black;
-$green: #00ff00;
 $font: "Courier New", monospace;
+$green: #00ff88; // neon
+$green-soft: #00d47a;
+$bg: #050505; // quase preto
+$bg-panel: #0b0f0c;
+$text: #c8ffdf;
+$grid: rgba(0, 255, 136, 0.06);
+$shadow-neon: 0 0 12px rgba(0, 255, 136, 0.5), 0 0 32px rgba(0, 255, 136, 0.25);
+
+// Dimensões
+$radius: 16px;
+$pad: 12px;
+$border: 1px;
+
+.hacker-node {
+  border: 2px solid #00ff00;
+  background: rgba(0, 255, 0, 0.1);
+  color: #00ff00;
+  font-family: "Courier New", monospace;
+}
+
 
 body {
   background-color: $bg;
@@ -21,4 +39,13 @@ body {
     font-size: 2.5rem;
     text-shadow: 0 0 10px $green;
   }
+}
+
+//temporario-usarei depois
+.dark .react-flow__node {
+  
+}
+ 
+.light .react-flow__node {
+  
 }
