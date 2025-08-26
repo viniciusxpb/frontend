@@ -81,3 +81,17 @@ body {
 .react-flow__handle-right {
   background: $green;
 }
+
+.globalWrapper{
+  display: flex;
+}
+
+.leftPanel{
+width: 20vw;
+height: 100vh;
+}
+
+.mainBoard{
+  width: 80vw;
+  height: 100vh;
+}

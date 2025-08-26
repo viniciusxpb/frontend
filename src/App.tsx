@@ -6,7 +6,7 @@ import { TextUpdaterNode } from './nodes/TextUpdaterNode';
 const nodeTypes = {
   textUpdater: TextUpdaterNode,
 };
- 
+
 const initialNodes = [
   {
     id: 'n1',
@@ -22,11 +22,11 @@ const initialNodes = [
   },
 ];
 const initialEdges = [{ id: 'n1-n2', source: 'n1', target: 'n2' }];
- 
+
 export default function App() {
   const [nodes, setNodes] = useState(initialNodes);
   const [edges, setEdges] = useState(initialEdges);
- 
+
   const onNodesChange = useCallback(
     (changes) => setNodes((nodesSnapshot) => applyNodeChanges(changes, nodesSnapshot)),
     [],
@@ -39,24 +39,28 @@ export default function App() {
     (params) => setEdges((edgesSnapshot) => addEdge(params, edgesSnapshot)),
     [],
   );
- 
+
   return (
     <>
-    <div className="app">
-      <h1>Hello, NDNM 👾</h1>
-      <p>Primeiro hello world no estilo hacker.</p>
-    </div>
-    <div style={{ width: '100vw', height: '100vh' }}>
-      <ReactFlow
-        colorMode="dark"
-        nodes={nodes}
-        edges={edges}
-        nodeTypes={nodeTypes}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        onConnect={onConnect}
-        fitView
-      />
+    <div className='globalWrapper'>
+
+        <div className='leftPanel'>
+          Teste painel lateral
+        </div>
+
+        <div className='mainBoard'>
+          <ReactFlow
+            colorMode="dark"
+            nodes={nodes}
+            edges={edges}
+            nodeTypes={nodeTypes}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onConnect={onConnect}
+            fitView
+          />
+        </div>
+
     </div>
     </>
   );
