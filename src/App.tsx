@@ -29,7 +29,7 @@ export default function App() {
   const [edges, setEdges] = useState(initialEdges);
   const [panelPos, setPanelPos] = useState<{ x: number; y: number } | null>(null);
 
-  
+
   const onNodesChange = useCallback(
     (changes) => setNodes((nodesSnapshot) => applyNodeChanges(changes, nodesSnapshot)),
     [],
@@ -43,27 +43,42 @@ export default function App() {
     [],
   );
 
+  const onClickAddNode = useCallback(
+    (x: number, y: number) => {
+      setNodes((nds) => [
+        ...nds,
+        {
+          id: `n${nds.length + 1}`, // id sequencial simples
+          className: 'hacker-node',
+          position: { x, y },       // posição recebida por parâmetro
+          data: { label: `Node ${nds.length + 1}` },
+        },
+      ]);
+    },
+    [setNodes]
+  );
+
   const PANEL_OFFSET_X = 280   // quanto “pra esquerda”
   const PANEL_OFFSET_Y = 100   // quanto “pra cima”
   const onPaneClick = usePaneClickCombo({
     onSingle: (e) => {
       console.log("clicou fora dos nodes", e.clientX, e.clientY);
 
-      if(panelPos){
+      if (panelPos) {
         setPanelPos(null);
       }
 
     },
     onDouble: (e) => {
       console.log("duplo clique no pane", e.clientX, e.clientY);
-      setPanelPos({ x: e.clientX-PANEL_OFFSET_X, y: e.clientY-PANEL_OFFSET_Y })
+      setPanelPos({ x: e.clientX - PANEL_OFFSET_X, y: e.clientY - PANEL_OFFSET_Y })
     },
   });
-  
+
 
   return (
     <>
-    <div className='globalWrapper'>
+      <div className='globalWrapper'>
 
         <div className='leftPanel'>
           Teste painel lateral
@@ -82,17 +97,18 @@ export default function App() {
             fitView
           >
             {panelPos && (
-        <Panel style={{ left: panelPos.x, top: panelPos.y, position: 'absolute' }}>
-          <div className="hacker-panel">
-            <p>⚡ Painel Hacker</p>
-            <button onClick={() => setPanelPos(null)}>Fechar</button>
-          </div>
-        </Panel>
-      )}
+              <Panel style={{ left: panelPos.x, top: panelPos.y, position: 'absolute' }}>
+                <div className="hacker-panel">
+                  <p>⚡ Painel Hacker</p>
+                  <button onClick={() => onClickAddNode(panelPos.y, panelPos.x)}>Novo node</button>
+                  <button onClick={() => setPanelPos(null)}>Fechar</button>
+                </div>
+              </Panel>
+            )}
           </ReactFlow>
         </div>
 
-    </div>
+      </div>
     </>
   );
 }
