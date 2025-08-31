@@ -42,13 +42,21 @@ export default function App() {
     (params) => setEdges((edgesSnapshot) => addEdge(params, edgesSnapshot)),
     [],
   );
+
+  const PANEL_OFFSET_X = 280   // quanto “pra esquerda”
+  const PANEL_OFFSET_Y = 100   // quanto “pra cima”
   const onPaneClick = usePaneClickCombo({
     onSingle: (e) => {
       console.log("clicou fora dos nodes", e.clientX, e.clientY);
+
+      if(panelPos){
+        setPanelPos(null);
+      }
+
     },
     onDouble: (e) => {
       console.log("duplo clique no pane", e.clientX, e.clientY);
-      setPanelPos({ x: e.clientX, y: e.clientY })
+      setPanelPos({ x: e.clientX-PANEL_OFFSET_X, y: e.clientY-PANEL_OFFSET_Y })
     },
   });
   
