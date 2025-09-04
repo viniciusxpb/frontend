@@ -1,5 +1,14 @@
-import { useState, useCallback, useRef } from 'react';
-import { ReactFlow, applyNodeChanges, applyEdgeChanges, addEdge, Panel, useReactFlow, ReactFlowProvider } from '@xyflow/react';
+import { useState, useCallback, useRef, useEffect } from 'react';
+import { 
+  ReactFlow, 
+  applyNodeChanges,
+  applyEdgeChanges, 
+  useOnSelectionChange,
+  addEdge, 
+  Panel, 
+  useReactFlow, 
+  ReactFlowProvider, 
+  useKeyPress} from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { TextUpdaterNode } from './nodes/TextUpdaterNode';
 import usePaneClickCombo from "./hooks/usePaneClickCombo";
@@ -35,6 +44,32 @@ function FlowInner() {
   const [panelPos, setPanelPos] = useState<{ x: number; y: number } | null>(null);
   const { screenToFlowPosition } = useReactFlow();
 
+  const [selectedNodes, setSelectedNodes] = useState([]);
+  const [selectedEdges, setSelectedEdges] = useState([]);
+
+  // the passed handler has to be memoized, otherwise the hook will not work correctly
+  const onChange = useCallback(({ nodes, edges }) => {
+
+    const nodeIds = nodes.map((node) => node.id);
+    const edgeIds = edges.map((edge) => edge.id);
+
+    setSelectedNodes(nodes.map((node) => node.id));
+    setSelectedEdges(edges.map((edge) => edge.id));
+
+    if (nodeIds.length > 0) {
+      console.log("Selecionou node(s):", nodeIds);
+    }
+    if (edgeIds.length > 0) {
+      console.log("Selecionou edge(s):", edgeIds);
+    }
+
+
+  }, []);
+
+  useOnSelectionChange({
+    onChange,
+  });
+
   const idRef = useRef(3);
   const getId = () => `${idRef.current++}`;
 
@@ -42,11 +77,13 @@ function FlowInner() {
     (changes) => setNodes((nodesSnapshot) => applyNodeChanges(changes, nodesSnapshot)),
     [],
   );
+
   const onEdgesChange = useCallback(
     (changes: EdgeChange[]) =>
       setEdges((edgesSnapshot) => applyEdgeChanges(changes, edgesSnapshot)),
     []
   );
+
   const onConnect = useCallback(
     (params: Connection) =>
       setEdges((edgesSnapshot) => addEdge(params, edgesSnapshot)),
@@ -98,6 +135,38 @@ function FlowInner() {
     },
     [setNodes]
   );
+
+  const deletePressed = useKeyPress('Delete');
+  const backspacePressed = useKeyPress('Backspace');
+
+    useEffect(() => {
+    const pressed = deletePressed || backspacePressed;
+    if (!pressed) return;
+
+    if (selectedNodes.length === 0 && selectedEdges.length === 0) return;
+
+    // remove edges selecionadas e também as conectadas aos nodes selecionados
+    setEdges((eds) => {
+      const selEdgeIds = new Set(selectedEdges);
+      const selNodeIds = new Set(selectedNodes);
+      return eds.filter(
+        (e) =>
+          !selEdgeIds.has(e.id) &&
+          !selNodeIds.has(e.source) &&
+          !selNodeIds.has(e.target)
+      );
+    });
+
+    // remove nodes selecionados
+    setNodes((nds) => {
+      const selNodeIds = new Set(selectedNodes);
+      return nds.filter((n) => !selNodeIds.has(n.id));
+    });
+
+    // limpa seleção local
+    setSelectedNodes([]);
+    setSelectedEdges([]);
+  }, [deletePressed, backspacePressed, selectedNodes, selectedEdges, setEdges, setNodes]);
 
   const PANEL_OFFSET_X = 280;   // quanto “pra esquerda”
   const PANEL_OFFSET_Y = 100;   // quanto “pra cima”
