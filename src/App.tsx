@@ -1,8 +1,13 @@
-import { useState, useCallback } from 'react';
-import { ReactFlow, applyNodeChanges, applyEdgeChanges, addEdge, Panel } from '@xyflow/react';
+import { useState, useCallback, useRef } from 'react';
+import { ReactFlow, applyNodeChanges, applyEdgeChanges, addEdge, Panel, useReactFlow, ReactFlowProvider } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { TextUpdaterNode } from './nodes/TextUpdaterNode';
 import usePaneClickCombo from "./hooks/usePaneClickCombo";
+
+import type {
+  EdgeChange,
+  Connection,
+} from '@xyflow/react';
 
 const nodeTypes = {
   textUpdater: TextUpdaterNode,
@@ -24,33 +29,69 @@ const initialNodes = [
 ];
 const initialEdges = [{ id: 'n1-n2', source: 'n1', target: 'n2' }];
 
-export default function App() {
+function FlowInner() {
   const [nodes, setNodes] = useState(initialNodes);
   const [edges, setEdges] = useState(initialEdges);
   const [panelPos, setPanelPos] = useState<{ x: number; y: number } | null>(null);
+  const { screenToFlowPosition } = useReactFlow();
 
+  const idRef = useRef(3);
+  const getId = () => `${idRef.current++}`;
 
   const onNodesChange = useCallback(
     (changes) => setNodes((nodesSnapshot) => applyNodeChanges(changes, nodesSnapshot)),
     [],
   );
   const onEdgesChange = useCallback(
-    (changes) => setEdges((edgesSnapshot) => applyEdgeChanges(changes, edgesSnapshot)),
-    [],
+    (changes: EdgeChange[]) =>
+      setEdges((edgesSnapshot) => applyEdgeChanges(changes, edgesSnapshot)),
+    []
   );
   const onConnect = useCallback(
-    (params) => setEdges((edgesSnapshot) => addEdge(params, edgesSnapshot)),
-    [],
+    (params: Connection) =>
+      setEdges((edgesSnapshot) => addEdge(params, edgesSnapshot)),
+    []
+  );
+
+  const onConnectEnd = useCallback(
+    (event, connectionState) => {
+      // when a connection is dropped on the pane it's not valid
+      if (!connectionState.isValid) {
+        // we need to remove the wrapper bounds, in order to get the correct position
+        const id = getId();
+        const { clientX, clientY } =
+          'changedTouches' in event ? event.changedTouches[0] : event;
+        const newNode = {
+          id,
+          position: screenToFlowPosition({
+            x: clientX,
+            y: clientY,
+          }),
+          data: { label: `Node ${id}` },
+          origin: [0.5, 0.0],
+        };
+
+        setNodes((nds) => nds.concat(newNode));
+        setEdges((eds) =>
+          eds.concat({ id, source: connectionState.fromNode.id, target: id }),
+        );
+      }
+    },
+    [screenToFlowPosition],
   );
 
   const onClickAddNode = useCallback(
     (x: number, y: number) => {
+      
       setNodes((nds) => [
         ...nds,
         {
           id: `n${nds.length + 1}`, // id sequencial simples
           className: 'hacker-node',
-          position: { x, y },       // posição recebida por parâmetro
+          position: screenToFlowPosition({
+            x: x,
+            y: y,
+          }),
           data: { label: `Node ${nds.length + 1}` },
         },
       ]);
@@ -58,8 +99,8 @@ export default function App() {
     [setNodes]
   );
 
-  const PANEL_OFFSET_X = 280   // quanto “pra esquerda”
-  const PANEL_OFFSET_Y = 100   // quanto “pra cima”
+  const PANEL_OFFSET_X = 280;   // quanto “pra esquerda”
+  const PANEL_OFFSET_Y = 100;   // quanto “pra cima”
   const onPaneClick = usePaneClickCombo({
     onSingle: (e) => {
       console.log("clicou fora dos nodes", e.clientX, e.clientY);
@@ -67,14 +108,12 @@ export default function App() {
       if (panelPos) {
         setPanelPos(null);
       }
-
     },
     onDouble: (e) => {
       console.log("duplo clique no pane", e.clientX, e.clientY);
-      setPanelPos({ x: e.clientX - PANEL_OFFSET_X, y: e.clientY - PANEL_OFFSET_Y })
+      setPanelPos({ x: e.clientX - PANEL_OFFSET_X, y: e.clientY - PANEL_OFFSET_Y });
     },
   });
-
 
   return (
     <>
@@ -94,13 +133,18 @@ export default function App() {
             onPaneClick={onPaneClick}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
+            onConnectEnd={onConnectEnd}
             fitView
           >
             {panelPos && (
               <Panel style={{ left: panelPos.x, top: panelPos.y, position: 'absolute' }}>
-                <div className="hacker-panel">
+                <div
+                  className="hacker-panel"
+                  // onMouseDown={(e) => e.stopPropagation()} // <-- evita que clique dentro do painel acione pane
+                  // onClick={(e) => e.stopPropagation()}
+                >
                   <p>⚡ Painel Hacker</p>
-                  <button onClick={() => onClickAddNode(panelPos.y, panelPos.x)}>Novo node</button>
+                  <button onClick={() => onClickAddNode(panelPos.x, panelPos.y)}>Novo node</button>
                   <button onClick={() => setPanelPos(null)}>Fechar</button>
                 </div>
               </Panel>
@@ -110,5 +154,13 @@ export default function App() {
 
       </div>
     </>
+  );
+}
+
+export default function App() {
+  return (
+    <ReactFlowProvider>
+      <FlowInner />
+    </ReactFlowProvider>
   );
 }
