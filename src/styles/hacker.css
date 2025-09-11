@@ -1,0 +1,77 @@
+/* layout */
+.globalWrapper {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  height: 100vh;
+  background: #0b0f0c;
+  color: #b7f397;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+}
+
+.leftPanel {
+  border-right: 1px solid #17351c;
+  padding: 12px;
+  background: #060a07;
+}
+
+.mainBoard { position: relative; }
+
+/* btns */
+.hacker-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1px solid #1f5329;
+  background: #0b1c10;
+  color: #b7f397;
+  cursor: pointer;
+  transition: transform 0.06s ease, box-shadow 0.12s ease, background 0.2s;
+  user-select: none;
+}
+.hacker-btn:hover { box-shadow: 0 0 0 2px #1f532966; }
+.hacker-btn:active { transform: translateY(1px); }
+.hacker-btn.ghost { background: transparent; border-color: #1f5329; color: #86d46a; }
+
+/* reactflow panel */
+.hacker-panel {
+  background: #061108;
+  border: 1px solid #1f5329;
+  border-radius: 12px;
+  padding: 10px;
+  min-width: 180px;
+  box-shadow: 0 8px 28px rgba(0,0,0,.6);
+}
+
+/* modal */
+.hacker-modal-backdrop {
+  position: fixed; inset: 0;
+  background: rgba(0, 10, 0, 0.65);
+  display: grid; place-items: center;
+  z-index: 9999;
+}
+.hacker-modal {
+  width: min(92vw, 560px);
+  background: #061108;
+  border: 1px solid #1f5329;
+  border-radius: 16px;
+  box-shadow: 0 12px 40px rgba(0,0,0,.65);
+  outline: none;
+}
+.hacker-modal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 14px; border-bottom: 1px solid #17351c;
+}
+.hacker-modal-header h3 { margin: 0; font-size: 16px; color: #b7f397; }
+.hacker-modal-body { padding: 16px; }
+.hacker-modal-grid { display: grid; gap: 10px; grid-template-columns: 1fr 1fr; }
+
+/* nodes */
+.hacker-node {
+  background: #061108;
+  border: 1px solid #1f5329;
+  border-radius: 12px;
+  padding: 8px 10px;
+  color: #b7f397;
+}
