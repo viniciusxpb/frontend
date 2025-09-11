@@ -8,6 +8,7 @@ import {
   Panel,
   useReactFlow,
   useKeyPress,
+  useUpdateNodeInternals,
   type EdgeChange, type Connection, type Node, type Edge
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
@@ -27,7 +28,7 @@ function normalizeNodeDynamicInputs(node: Node, edges: Edge[]): Node {
 
   const currentInputs: string[] = (node.data?.inputs ?? ['in_0']).slice();
 
-  // Quais handles de entrada estão em uso neste nó?
+  // Handles de entrada em uso neste nó
   const used = new Set(
     edges
       .filter((e) => e.target === node.id && e.targetHandle)
@@ -35,7 +36,7 @@ function normalizeNodeDynamicInputs(node: Node, edges: Edge[]): Node {
   );
 
   const usedCount = used.size;
-  const shouldLen = Math.max(usedCount + 1, 1); // sempre 1 livre
+  const shouldLen = Math.max(usedCount + 1, 1); // sempre manter 1 livre
 
   const nextInputs: string[] = [];
   for (let i = 0; i < shouldLen; i++) nextInputs.push(inputId(i));
@@ -57,11 +58,12 @@ function normalizeAll(nodes: Node[], edges: Edge[]): Node[] {
 }
 /* =================================================================== */
 
+// Se seu TextUpdaterNode NÃO tem Handle, deixe sem edges iniciais para evitar o erro #008
 const initialNodes: Node[] = [
   { id: 'n1', type: 'textUpdater', className: 'hacker-node', position: { x: 0, y: 0 }, data: { label: 'Node 1' } },
   { id: 'n2', type: 'textUpdater', className: 'hacker-node', position: { x: 0, y: 100 }, data: { label: 'Node 2' } },
 ];
-const initialEdges: Edge[] = [{ id: 'n1-n2', source: 'n1', target: 'n2' }];
+const initialEdges: Edge[] = []; // [{ id: 'n1-n2', source: 'n1', target: 'n2' }];
 
 export default function FlowInner() {
   const [nodes, setNodes] = useState<Node[]>(initialNodes);
@@ -71,6 +73,7 @@ export default function FlowInner() {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const { screenToFlowPosition } = useReactFlow();
+  const updateNodeInternals = useUpdateNodeInternals();
 
   const [selectedNodes, setSelectedNodes] = useState<string[]>([]);
   const [selectedEdges, setSelectedEdges] = useState<string[]>([]);
@@ -85,12 +88,33 @@ export default function FlowInner() {
   const idRef = useRef(3);
   const nextId = () => `${idRef.current++}`;
 
+  /* ===== Notificar o React Flow quando a quantidade de handles mudar ===== */
+  const prevInputCountsRef = useRef<Record<string, number>>({});
+  useEffect(() => {
+    const toUpdate: string[] = [];
+    for (const n of nodes) {
+      if (n.type === 'add' || n.type === 'subtract') {
+        const count = (n.data?.inputs ?? ['in_0']).length;
+        const prev = prevInputCountsRef.current[n.id];
+        if (prev === undefined || prev !== count) {
+          toUpdate.push(n.id);
+          prevInputCountsRef.current[n.id] = count;
+        }
+      }
+    }
+    if (toUpdate.length) {
+      // avisa o React Flow que os handles deste nó mudaram
+      toUpdate.forEach((id) => updateNodeInternals(id));
+    }
+  }, [nodes, updateNodeInternals]);
+  /* ======================================================================= */
+
   const onNodesChange = useCallback(
     (changes) => setNodes((snap) => applyNodeChanges(changes, snap)),
     []
   );
 
-  // 🔧 onEdgesChange: aplica alterações e normaliza entradas dinâmicas
+  // onEdgesChange: aplica alterações e normaliza entradas dinâmicas
   const onEdgesChange = useCallback((changes: EdgeChange[]) => {
     setEdges((prev) => {
       const next = applyEdgeChanges(changes, prev);
@@ -99,7 +123,7 @@ export default function FlowInner() {
     });
   }, []);
 
-  // 🔧 onConnect: adiciona edge e normaliza com base no array final
+  // onConnect: adiciona edge e normaliza com base no array final
   const onConnect = useCallback((p: Connection) => {
     setEdges((prev) => {
       const next = addEdge(p, prev);
@@ -128,7 +152,7 @@ export default function FlowInner() {
     [screenToFlowPosition]
   );
 
-  // ADD pelo modal → centro da viewport atual (respeita dinâmicas)
+  // ADD pelo modal → centro da viewport atual (com segurança para add/subtract)
   const addNodeByType = useCallback((typeKey: string) => {
     const spec = nodePalette.find((n) => n.type === (typeKey as any));
     if (!spec) return;
@@ -139,22 +163,24 @@ export default function FlowInner() {
 
     const baseData = { ...(spec.defaultData ?? {}) };
     if ((typeKey === 'add' || typeKey === 'subtract') && !baseData.inputs) {
-      baseData.inputs = ['in_0']; // segurança: 1 handle inicial
+      baseData.inputs = ['in_0']; // garante 1 handle inicial
     }
 
-    setNodes((nds) => normalizeAll(
-      [
-        ...nds,
-        {
-          id,
-          type: spec.type as Node['type'],
-          className: 'hacker-node',
-          position: pos,
-          data: baseData,
-        } as Node,
-      ],
-      edges
-    ));
+    setNodes((nds) =>
+      normalizeAll(
+        [
+          ...nds,
+          {
+            id,
+            type: spec.type as Node['type'],
+            className: 'hacker-node',
+            position: pos,
+            data: baseData,
+          } as Node,
+        ],
+        edges
+      )
+    );
     setIsModalOpen(false);
   }, [edges, screenToFlowPosition]);
 
