@@ -8,7 +8,7 @@ import {
   Panel,
   useReactFlow,
   useKeyPress,
-  type EdgeChange, type Connection, type Node
+  type EdgeChange, type Connection, type Node, type Edge
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
@@ -19,20 +19,58 @@ import usePaneClickCombo from '../hooks/usePaneClickCombo';
 
 import { nodeTypes, nodePalette } from '../nodes/registry';
 
+/* ================= Helpers para entradas dinâmicas ================= */
+const inputId = (idx: number) => `in_${idx}`;
+
+function normalizeNodeDynamicInputs(node: Node, edges: Edge[]): Node {
+  if (!node || !(node.type === 'add' || node.type === 'subtract')) return node;
+
+  const currentInputs: string[] = (node.data?.inputs ?? ['in_0']).slice();
+
+  // Quais handles de entrada estão em uso neste nó?
+  const used = new Set(
+    edges
+      .filter((e) => e.target === node.id && e.targetHandle)
+      .map((e) => String(e.targetHandle))
+  );
+
+  const usedCount = used.size;
+  const shouldLen = Math.max(usedCount + 1, 1); // sempre 1 livre
+
+  const nextInputs: string[] = [];
+  for (let i = 0; i < shouldLen; i++) nextInputs.push(inputId(i));
+
+  if (JSON.stringify(nextInputs) !== JSON.stringify(currentInputs)) {
+    return {
+      ...node,
+      data: {
+        ...(node.data ?? {}),
+        inputs: nextInputs,
+      },
+    };
+  }
+  return node;
+}
+
+function normalizeAll(nodes: Node[], edges: Edge[]): Node[] {
+  return nodes.map((n) => normalizeNodeDynamicInputs(n, edges));
+}
+/* =================================================================== */
+
 const initialNodes: Node[] = [
   { id: 'n1', type: 'textUpdater', className: 'hacker-node', position: { x: 0, y: 0 }, data: { label: 'Node 1' } },
   { id: 'n2', type: 'textUpdater', className: 'hacker-node', position: { x: 0, y: 100 }, data: { label: 'Node 2' } },
 ];
-const initialEdges = [{ id: 'n1-n2', source: 'n1', target: 'n2' }];
+const initialEdges: Edge[] = [{ id: 'n1-n2', source: 'n1', target: 'n2' }];
 
 export default function FlowInner() {
-  const [nodes, setNodes] = useState(initialNodes);
-  const [edges, setEdges] = useState(initialEdges);
+  const [nodes, setNodes] = useState<Node[]>(initialNodes);
+  const [edges, setEdges] = useState<Edge[]>(initialEdges);
 
   const [panelPos, setPanelPos] = useState<{ x: number; y: number } | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  const { screenToFlowPosition, getViewport } = useReactFlow();
+  const { screenToFlowPosition } = useReactFlow();
 
   const [selectedNodes, setSelectedNodes] = useState<string[]>([]);
   const [selectedEdges, setSelectedEdges] = useState<string[]>([]);
@@ -47,50 +85,80 @@ export default function FlowInner() {
   const idRef = useRef(3);
   const nextId = () => `${idRef.current++}`;
 
-  const onNodesChange = useCallback((changes) => setNodes((snap) => applyNodeChanges(changes, snap)), []);
-  const onEdgesChange = useCallback((changes: EdgeChange[]) => setEdges((snap) => applyEdgeChanges(changes, snap)), []);
-  const onConnect    = useCallback((p: Connection) => setEdges((snap) => addEdge(p, snap)), []);
+  const onNodesChange = useCallback(
+    (changes) => setNodes((snap) => applyNodeChanges(changes, snap)),
+    []
+  );
 
-  const onConnectEnd = useCallback((event, state) => {
-    if (!state.isValid) {
-      const id = nextId();
-      const { clientX, clientY } = 'changedTouches' in event ? event.changedTouches[0] : event;
-      const newNode = {
-        id,
-        type: 'textUpdater',
-        className: 'hacker-node',
-        position: screenToFlowPosition({ x: clientX, y: clientY }),
-        data: { label: `Node ${id}` },
-        origin: [0.5, 0.0] as [number, number],
-      };
-      setNodes((nds) => nds.concat(newNode));
-      setEdges((eds) => eds.concat({ id, source: state.fromNode.id, target: id }));
-    }
-  }, [screenToFlowPosition]);
+  // 🔧 onEdgesChange: aplica alterações e normaliza entradas dinâmicas
+  const onEdgesChange = useCallback((changes: EdgeChange[]) => {
+    setEdges((prev) => {
+      const next = applyEdgeChanges(changes, prev);
+      setNodes((nds) => normalizeAll(nds, next));
+      return next;
+    });
+  }, []);
 
-  // ADD pelo modal → centro da viewport atual
+  // 🔧 onConnect: adiciona edge e normaliza com base no array final
+  const onConnect = useCallback((p: Connection) => {
+    setEdges((prev) => {
+      const next = addEdge(p, prev);
+      setNodes((nds) => normalizeAll(nds, next));
+      return next;
+    });
+  }, []);
+
+  const onConnectEnd = useCallback(
+    (event, state) => {
+      if (!state.isValid) {
+        const id = nextId();
+        const { clientX, clientY } = 'changedTouches' in event ? event.changedTouches[0] : event;
+        const newNode: Node = {
+          id,
+          type: 'textUpdater',
+          className: 'hacker-node',
+          position: screenToFlowPosition({ x: clientX, y: clientY }),
+          data: { label: `Node ${id}` },
+          origin: [0.5, 0.0] as [number, number],
+        };
+        setNodes((nds) => nds.concat(newNode));
+        setEdges((eds) => eds.concat({ id: `e-${Math.random()}`, source: state.fromNode.id, target: id }));
+      }
+    },
+    [screenToFlowPosition]
+  );
+
+  // ADD pelo modal → centro da viewport atual (respeita dinâmicas)
   const addNodeByType = useCallback((typeKey: string) => {
-    const spec = nodePalette.find(n => n.type === (typeKey as any));
+    const spec = nodePalette.find((n) => n.type === (typeKey as any));
     if (!spec) return;
 
     const id = `n${nextId()}`;
     const center = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
     const pos = screenToFlowPosition(center);
 
-    setNodes((nds) => [
-      ...nds,
-      {
-        id,
-        type: spec.type,
-        className: 'hacker-node',
-        position: pos,
-        data: { ...spec.defaultData },
-      },
-    ]);
-    setIsModalOpen(false);
-  }, [screenToFlowPosition]);
+    const baseData = { ...(spec.defaultData ?? {}) };
+    if ((typeKey === 'add' || typeKey === 'subtract') && !baseData.inputs) {
+      baseData.inputs = ['in_0']; // segurança: 1 handle inicial
+    }
 
-  // Delete/Backspace
+    setNodes((nds) => normalizeAll(
+      [
+        ...nds,
+        {
+          id,
+          type: spec.type as Node['type'],
+          className: 'hacker-node',
+          position: pos,
+          data: baseData,
+        } as Node,
+      ],
+      edges
+    ));
+    setIsModalOpen(false);
+  }, [edges, screenToFlowPosition]);
+
+  // Delete/Backspace remove seleção
   const del = useKeyPress('Delete');
   const bsp = useKeyPress('Backspace');
   useEffect(() => {
@@ -101,13 +169,21 @@ export default function FlowInner() {
     setEdges((eds) => {
       const selE = new Set(selectedEdges);
       const selN = new Set(selectedNodes);
-      return eds.filter(e => !selE.has(e.id) && !selN.has(e.source) && !selN.has(e.target));
+      const next = eds.filter(
+        (e) => !selE.has(e.id) && !selN.has(e.source) && !selN.has(e.target)
+      );
+      // normaliza após remoções
+      setNodes((nds) => normalizeAll(nds, next));
+      return next;
     });
+
     setNodes((nds) => {
       const selN = new Set(selectedNodes);
-      return nds.filter(n => !selN.has(n.id));
+      return nds.filter((n) => !selN.has(n.id));
     });
-    setSelectedNodes([]); setSelectedEdges([]);
+
+    setSelectedNodes([]);
+    setSelectedEdges([]);
   }, [del, bsp, selectedNodes, selectedEdges]);
 
   // Pane (mantém painel flutuante por duplo-clique, se quiser)

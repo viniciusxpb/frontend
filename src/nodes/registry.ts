@@ -16,6 +16,6 @@ export const nodePalette: Array<{
   defaultData: any;
 }> = [
   { type: 'textUpdater', label: '📝 Texto',     defaultData: { label: 'Novo texto' } },
-  { type: 'add',         label: '➕ Somar',     defaultData: { values: [1, 2] } },
-  { type: 'subtract',    label: '➖ Subtrair',  defaultData: { values: [10, 3] } },
+  { type: 'add',         label: '➕ Somar',     defaultData: { inputs: ['in_0'] } },
+  { type: 'subtract',    label: '➖ Subtrair',  defaultData: { inputs: ['in_0'] } },
 ];

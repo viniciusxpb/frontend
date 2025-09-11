@@ -1,14 +1,34 @@
 import type { NodeProps } from '@xyflow/react';
+import { Handle, Position } from '@xyflow/react';
 
-export function SubtractNode({ data }: NodeProps<{ values: number[] }>) {
-  const values = data?.values ?? [0, 0];
-  const result = values.slice(1).reduce((acc, v) => acc - (Number(v) || 0), Number(values[0]) || 0);
+type SubData = {
+  inputs: string[];    // ['in_0', 'in_1', ...]
+};
+
+export function SubtractNode({ data }: NodeProps<SubData>) {
+  const inputs = data?.inputs ?? ['in_0'];
 
   return (
     <div className="hacker-node">
       <strong>➖ Subtrair</strong>
-      <div style={{ marginTop: 6, opacity: 0.8 }}>Entrada: {values.join(' , ')}</div>
-      <div style={{ marginTop: 8 }}>Resultado: <b>{result}</b></div>
+
+      {/* Entradas dinâmicas à esquerda */}
+      {inputs.map((id, idx) => (
+        <Handle
+          key={id}
+          type="target"
+          id={id}
+          position={Position.Left}
+          style={{ top: 28 + idx * 18 }}
+        />
+      ))}
+
+      {/* Saída única à direita */}
+      <Handle type="source" id="out" position={Position.Right} />
+
+      <div style={{ marginTop: 8, opacity: 0.8, fontSize: 12 }}>
+        Entradas: {inputs.length} (autoexpansíveis)
+      </div>
     </div>
   );
 }
