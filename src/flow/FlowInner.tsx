@@ -69,12 +69,21 @@ const initialNodes: Node[] = [
 ];
 const initialEdges: Edge[] = [];
 
+/** Estado temporário quando o usuário solta a conexão no pane (drop inválido) */
+type PendingConnect = {
+  fromNodeId: string | null;
+  fromHandleId?: string | null;
+  pos: { x: number; y: number };
+};
+
 export default function FlowInner() {
   const [nodes, setNodes] = useState<Node[]>(initialNodes);
   const [edges, setEdges] = useState<Edge[]>(initialEdges);
 
   const [panelPos, setPanelPos] = useState<{ x: number; y: number } | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  const [pendingConnect, setPendingConnect] = useState<PendingConnect | null>(null);
 
   const { screenToFlowPosition } = useReactFlow();
   const updateNodeInternals = useUpdateNodeInternals();
@@ -133,45 +142,81 @@ export default function FlowInner() {
     });
   }, []);
 
+  /** Ao soltar a conexão: se inválido, abre o catálogo e guarda posição + origem */
   const onConnectEnd = useCallback(
     (event: MouseEvent | TouchEvent, state: any) => {
       if (!state?.isValid) {
-        const id = nextId();
-        const isTouch = 'changedTouches' in event && event.changedTouches && event.changedTouches.length > 0;
-        const point = isTouch ? event.changedTouches[0] : (event as MouseEvent);
-        const newNode: Node = {
-          id,
-          type: 'textUpdater',
-          className: 'hacker-node',
-          position: screenToFlowPosition({ x: (point as any).clientX, y: (point as any).clientY }),
-          data: { label: `Node ${id}` },
-          origin: [0.5, 0.0] as [number, number],
-        };
-        setNodes((nds) => nds.concat(newNode));
-        if (state?.fromNode?.id) {
-          setEdges((eds) => eds.concat({ id: `e-${Math.random()}`, source: state.fromNode.id, target: id }));
-        }
+        const isTouch =
+          'changedTouches' in event && event.changedTouches && event.changedTouches.length > 0;
+        const point = isTouch ? event.changedTouches[0] as any : (event as MouseEvent);
+        const pos = screenToFlowPosition({ x: (point as any).clientX, y: (point as any).clientY });
+
+        setPendingConnect({
+          fromNodeId: state?.fromNode?.id ?? null,
+          fromHandleId: state?.fromHandleId ?? null,
+          pos,
+        });
+
+        setIsModalOpen(true);
       }
     },
     [screenToFlowPosition]
   );
 
-  // ADD pelo modal → centro da viewport; se o nó suporta entradas dinâmicas, inicia em modo "n"
+  // ADD pelo modal → se veio de pendingConnect, cria no drop e conecta; senão, centro da viewport
   const addNodeByType = useCallback((typeKey: string) => {
     const spec = nodePalette.find((n) => n.type === (typeKey as any));
     if (!spec) return;
 
     const id = `n${nextId()}`;
-    const center = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
-    const pos = screenToFlowPosition(center);
 
     const baseData: any = { ...(spec.defaultData ?? {}) };
-
     // Convenção: add/subtract entram como dinâmicos
     if ((typeKey === 'add' || typeKey === 'subtract') && baseData.inputsMode === undefined) {
       baseData.inputsMode = 'n';
       baseData.inputsCount = 1; // começa com 1
     }
+
+   if (pendingConnect) {
+      const { pos, fromNodeId, fromHandleId } = pendingConnect;
+
+      setNodes((nds) =>
+        normalizeAll(
+          [
+            ...nds,
+            {
+              id,
+              type: spec.type as Node['type'],
+              className: 'hacker-node',
+              position: pos,
+              data: baseData,
+            } as Node,
+          ],
+          edges
+        )
+      );
+
+      if (fromNodeId) {
+        setEdges((eds) => {
+          const newEdge: Edge = {
+            id: `e-${fromNodeId}-${id}-${Date.now()}`,
+            source: fromNodeId,
+            target: id,
+            ...(fromHandleId ? { sourceHandle: String(fromHandleId) } : {}),
+          };
+          const next = eds.concat(newEdge);
+          setNodes((nds) => normalizeAll(nds, next));
+          return next;
+        });
+      }
+
+      setPendingConnect(null);
+      setIsModalOpen(false);
+      return;
+    }
+
+   const center = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+    const pos = screenToFlowPosition(center);
 
     setNodes((nds) =>
       normalizeAll(
@@ -188,8 +233,9 @@ export default function FlowInner() {
         edges
       )
     );
+
     setIsModalOpen(false);
-  }, [edges, screenToFlowPosition]);
+  }, [edges, screenToFlowPosition, pendingConnect]);
 
   // Delete/Backspace remove seleção
   const del = useKeyPress('Delete');
@@ -230,6 +276,12 @@ export default function FlowInner() {
     },
   });
 
+  const handleCloseModal = useCallback(() => {
+    // se o usuário fechar sem escolher, descarta o pendingConnect
+    setPendingConnect(null);
+    setIsModalOpen(false);
+  }, []);
+
   return (
     <>
       <div className="globalWrapper">
@@ -260,7 +312,7 @@ export default function FlowInner() {
         </div>
       </div>
 
-      <HackerModal open={isModalOpen} onClose={() => setIsModalOpen(false)}>
+      <HackerModal open={isModalOpen} onClose={handleCloseModal}>
         <NodeCatalog onPick={addNodeByType} />
       </HackerModal>
     </>
