@@ -142,8 +142,7 @@ export default function FlowInner() {
     });
   }, []);
 
-  /** Ao soltar a conexão: se inválido, abre o catálogo e guarda posição + origem */
-  const onConnectEnd = useCallback(
+   const onConnectEnd = useCallback(
     (event: MouseEvent | TouchEvent, state: any) => {
       if (!state?.isValid) {
         const isTouch =
@@ -177,7 +176,7 @@ export default function FlowInner() {
       baseData.inputsCount = 1; // começa com 1
     }
 
-   if (pendingConnect) {
+    if (pendingConnect) {
       const { pos, fromNodeId, fromHandleId } = pendingConnect;
 
       setNodes((nds) =>
@@ -215,7 +214,7 @@ export default function FlowInner() {
       return;
     }
 
-   const center = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+    const center = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
     const pos = screenToFlowPosition(center);
 
     setNodes((nds) =>
