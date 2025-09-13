@@ -16,6 +16,8 @@ export const nodePalette: Array<{
   defaultData: any;
 }> = [
   { type: 'textUpdater', label: '📝 Texto',     defaultData: { label: 'Novo texto' } },
-  { type: 'add',         label: '➕ Somar',     defaultData: { inputs: ['in_0'] } },
-  { type: 'subtract',    label: '➖ Subtrair',  defaultData: { inputs: ['in_0'] } },
+
+  // IMPORTANTE: agora usamos inputs dinâmicos por contagem (não mais array de ids)
+  { type: 'add',         label: '➕ Somar',     defaultData: { label: '➕ Somar',     inputsMode: 'n', inputsCount: 1, outputsMode: 1, outputsCount: 1 } },
+  { type: 'subtract',    label: '➖ Subtrair',  defaultData: { label: '➖ Subtrair',  inputsMode: 'n', inputsCount: 1, outputsMode: 1, outputsCount: 1 } },
 ];

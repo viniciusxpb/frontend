@@ -1,34 +1,32 @@
 import type { NodeProps } from '@xyflow/react';
-import { Handle, Position } from '@xyflow/react';
+import { BaseIONode, type BaseNodeData } from './BaseIONode';
 
-type SubData = {
-  inputs: string[];    // ['in_0', 'in_1', ...]
-};
+/**
+ * Novo SubtractNode usando BaseIONode
+ * - Mesmo esquema do AddNode: entradas dinâmicas pelo FlowInner
+ * - Saída única (out_0)
+ */
+type SubtractData = BaseNodeData & {};
 
-export function SubtractNode({ data }: NodeProps<SubData>) {
-  const inputs = data?.inputs ?? ['in_0'];
+export function SubtractNode(props: NodeProps<SubtractData>) {
+  const { data } = props;
 
   return (
-    <div className="hacker-node">
-      <strong>➖ Subtrair</strong>
-
-      {/* Entradas dinâmicas à esquerda */}
-      {inputs.map((id, idx) => (
-        <Handle
-          key={id}
-          type="target"
-          id={id}
-          position={Position.Left}
-          style={{ top: 28 + idx * 18 }}
-        />
-      ))}
-
-      {/* Saída única à direita */}
-      <Handle type="source" id="out" position={Position.Right} />
-
+    <BaseIONode
+      {...props}
+      data={{
+        label: data.label ?? '➖ Subtrair',
+        value: data.value ?? '',
+        inputsMode: data.inputsMode ?? 'n',
+        inputsCount: data.inputsCount ?? 1,
+        outputsMode: data.outputsMode ?? 1,
+        outputsCount: data.outputsCount ?? 1,
+        onChange: data.onChange,
+      }}
+    >
       <div style={{ marginTop: 8, opacity: 0.8, fontSize: 12 }}>
-        Entradas: {inputs.length} (autoexpansíveis)
+        Entradas: {data.inputsCount ?? 1} (autoexpansíveis)
       </div>
-    </div>
+    </BaseIONode>
   );
 }

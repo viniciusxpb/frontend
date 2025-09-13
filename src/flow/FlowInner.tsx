@@ -20,33 +20,37 @@ import usePaneClickCombo from '../hooks/usePaneClickCombo';
 
 import { nodeTypes, nodePalette } from '../nodes/registry';
 
-/* ================= Helpers para entradas dinâmicas ================= */
-const inputId = (idx: number) => `in_${idx}`;
+/* ================= Helpers p/ entradas dinâmicas (BaseIONode em modo "n") ================= */
+type IOmode = 0 | 1 | 'n';
 
-function normalizeNodeDynamicInputs(node: Node, edges: Edge[]): Node {
-  if (!node || !(node.type === 'add' || node.type === 'subtract')) return node;
+function isDynInputsNode(n: Node) {
+  const m: IOmode | undefined = (n.data as any)?.inputsMode;
+  return m === 'n';
+}
 
-  const currentInputs: string[] = (node.data?.inputs ?? ['in_0']).slice();
+function normalizeDynCounts(node: Node, edges: Edge[]): Node {
+  if (!node || !isDynInputsNode(node)) return node;
 
-  // Handles de entrada em uso neste nó
+  const data: any = node.data ?? {};
+  const currentCount: number = Number.isFinite(data.inputsCount) ? data.inputsCount : 1;
+
+  // conta quantos handles "in_*" estão realmente usados como alvo
   const used = new Set(
     edges
-      .filter((e) => e.target === node.id && e.targetHandle)
+      .filter((e) => e.target === node.id && e.targetHandle && String(e.targetHandle).startsWith('in_'))
       .map((e) => String(e.targetHandle))
   );
-
   const usedCount = used.size;
-  const shouldLen = Math.max(usedCount + 1, 1); // sempre manter 1 livre
 
-  const nextInputs: string[] = [];
-  for (let i = 0; i < shouldLen; i++) nextInputs.push(inputId(i));
+  const shouldCount = Math.max(usedCount + 1, 1); // sempre manter 1 livre
 
-  if (JSON.stringify(nextInputs) !== JSON.stringify(currentInputs)) {
+  if (shouldCount !== currentCount) {
     return {
       ...node,
       data: {
-        ...(node.data ?? {}),
-        inputs: nextInputs,
+        ...data,
+        inputsMode: 'n',
+        inputsCount: shouldCount,
       },
     };
   }
@@ -54,16 +58,16 @@ function normalizeNodeDynamicInputs(node: Node, edges: Edge[]): Node {
 }
 
 function normalizeAll(nodes: Node[], edges: Edge[]): Node[] {
-  return nodes.map((n) => normalizeNodeDynamicInputs(n, edges));
+  return nodes.map((n) => normalizeDynCounts(n, edges));
 }
-/* =================================================================== */
+/* ========================================================================================== */
 
-// Se seu TextUpdaterNode NÃO tem Handle, deixe sem edges iniciais para evitar o erro #008
+// Exemplo inicial simples (TextUpdater sem handles para evitar erro #008)
 const initialNodes: Node[] = [
   { id: 'n1', type: 'textUpdater', className: 'hacker-node', position: { x: 0, y: 0 }, data: { label: 'Node 1' } },
   { id: 'n2', type: 'textUpdater', className: 'hacker-node', position: { x: 0, y: 100 }, data: { label: 'Node 2' } },
 ];
-const initialEdges: Edge[] = []; // [{ id: 'n1-n2', source: 'n1', target: 'n2' }];
+const initialEdges: Edge[] = [];
 
 export default function FlowInner() {
   const [nodes, setNodes] = useState<Node[]>(initialNodes);
@@ -88,33 +92,31 @@ export default function FlowInner() {
   const idRef = useRef(3);
   const nextId = () => `${idRef.current++}`;
 
-  /* ===== Notificar o React Flow quando a quantidade de handles mudar ===== */
-  const prevInputCountsRef = useRef<Record<string, number>>({});
+  /* ===== avisa o React Flow quando a quantidade de handles mudar ===== */
+  const prevCountsRef = useRef<Record<string, number>>({});
   useEffect(() => {
     const toUpdate: string[] = [];
     for (const n of nodes) {
-      if (n.type === 'add' || n.type === 'subtract') {
-        const count = (n.data?.inputs ?? ['in_0']).length;
-        const prev = prevInputCountsRef.current[n.id];
+      if (isDynInputsNode(n)) {
+        const count = (n.data as any)?.inputsCount ?? 1;
+        const prev = prevCountsRef.current[n.id];
         if (prev === undefined || prev !== count) {
           toUpdate.push(n.id);
-          prevInputCountsRef.current[n.id] = count;
+          prevCountsRef.current[n.id] = count;
         }
       }
     }
     if (toUpdate.length) {
-      // avisa o React Flow que os handles deste nó mudaram
       toUpdate.forEach((id) => updateNodeInternals(id));
     }
   }, [nodes, updateNodeInternals]);
-  /* ======================================================================= */
+  /* =================================================================== */
 
   const onNodesChange = useCallback(
     (changes) => setNodes((snap) => applyNodeChanges(changes, snap)),
     []
   );
 
-  // onEdgesChange: aplica alterações e normaliza entradas dinâmicas
   const onEdgesChange = useCallback((changes: EdgeChange[]) => {
     setEdges((prev) => {
       const next = applyEdgeChanges(changes, prev);
@@ -123,7 +125,6 @@ export default function FlowInner() {
     });
   }, []);
 
-  // onConnect: adiciona edge e normaliza com base no array final
   const onConnect = useCallback((p: Connection) => {
     setEdges((prev) => {
       const next = addEdge(p, prev);
@@ -133,26 +134,29 @@ export default function FlowInner() {
   }, []);
 
   const onConnectEnd = useCallback(
-    (event, state) => {
-      if (!state.isValid) {
+    (event: MouseEvent | TouchEvent, state: any) => {
+      if (!state?.isValid) {
         const id = nextId();
-        const { clientX, clientY } = 'changedTouches' in event ? event.changedTouches[0] : event;
+        const isTouch = 'changedTouches' in event && event.changedTouches && event.changedTouches.length > 0;
+        const point = isTouch ? event.changedTouches[0] : (event as MouseEvent);
         const newNode: Node = {
           id,
           type: 'textUpdater',
           className: 'hacker-node',
-          position: screenToFlowPosition({ x: clientX, y: clientY }),
+          position: screenToFlowPosition({ x: (point as any).clientX, y: (point as any).clientY }),
           data: { label: `Node ${id}` },
           origin: [0.5, 0.0] as [number, number],
         };
         setNodes((nds) => nds.concat(newNode));
-        setEdges((eds) => eds.concat({ id: `e-${Math.random()}`, source: state.fromNode.id, target: id }));
+        if (state?.fromNode?.id) {
+          setEdges((eds) => eds.concat({ id: `e-${Math.random()}`, source: state.fromNode.id, target: id }));
+        }
       }
     },
     [screenToFlowPosition]
   );
 
-  // ADD pelo modal → centro da viewport atual (com segurança para add/subtract)
+  // ADD pelo modal → centro da viewport; se o nó suporta entradas dinâmicas, inicia em modo "n"
   const addNodeByType = useCallback((typeKey: string) => {
     const spec = nodePalette.find((n) => n.type === (typeKey as any));
     if (!spec) return;
@@ -161,9 +165,12 @@ export default function FlowInner() {
     const center = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
     const pos = screenToFlowPosition(center);
 
-    const baseData = { ...(spec.defaultData ?? {}) };
-    if ((typeKey === 'add' || typeKey === 'subtract') && !baseData.inputs) {
-      baseData.inputs = ['in_0']; // garante 1 handle inicial
+    const baseData: any = { ...(spec.defaultData ?? {}) };
+
+    // Convenção: add/subtract entram como dinâmicos
+    if ((typeKey === 'add' || typeKey === 'subtract') && baseData.inputsMode === undefined) {
+      baseData.inputsMode = 'n';
+      baseData.inputsCount = 1; // começa com 1
     }
 
     setNodes((nds) =>
@@ -198,7 +205,6 @@ export default function FlowInner() {
       const next = eds.filter(
         (e) => !selE.has(e.id) && !selN.has(e.source) && !selN.has(e.target)
       );
-      // normaliza após remoções
       setNodes((nds) => normalizeAll(nds, next));
       return next;
     });
@@ -212,7 +218,7 @@ export default function FlowInner() {
     setSelectedEdges([]);
   }, [del, bsp, selectedNodes, selectedEdges]);
 
-  // Pane (mantém painel flutuante por duplo-clique, se quiser)
+  // Pane
   const PANEL_OFFSET_X = 280, PANEL_OFFSET_Y = 100;
   const onPaneClick = usePaneClickCombo({
     onSingle: () => setPanelPos(null),

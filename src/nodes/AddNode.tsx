@@ -1,34 +1,35 @@
 import type { NodeProps } from '@xyflow/react';
-import { Handle, Position } from '@xyflow/react';
+import { BaseIONode, type BaseNodeData } from './BaseIONode';
 
-type AddData = {
-  inputs: string[];    // ['in_0', 'in_1', ...]
+/**
+ * Novo AddNode usando BaseIONode
+ * - As entradas são controladas por (data.inputsMode === "n") e (data.inputsCount)
+ * - O FlowInner normaliza automaticamente inputsCount = (entradas usadas) + 1
+ * - Saída: 1 (out_0)
+ */
+type AddData = BaseNodeData & {
+  // campos específicos (se precisar no futuro)
 };
 
-export function AddNode({ data }: NodeProps<AddData>) {
-  const inputs = data?.inputs ?? ['in_0'];
+export function AddNode(props: NodeProps<AddData>) {
+  const { data } = props;
 
   return (
-    <div className="hacker-node">
-      <strong>➕ Somar</strong>
-
-      {/* Entradas dinâmicas à esquerda */}
-      {inputs.map((id, idx) => (
-        <Handle
-          key={id}
-          type="target"
-          id={id}
-          position={Position.Left}
-          style={{ top: 28 + idx * 18 }}
-        />
-      ))}
-
-      {/* Saída única à direita */}
-      <Handle type="source" id="out" position={Position.Right} />
-
+    <BaseIONode
+      {...props}
+      data={{
+        label: data.label ?? '➕ Somar',
+        value: data.value ?? '',
+        inputsMode: data.inputsMode ?? 'n',  // múltiplas entradas dinâmicas
+        inputsCount: data.inputsCount ?? 1,  // FlowInner ajusta isso com base nos edges
+        outputsMode: data.outputsMode ?? 1,  // uma saída (out_0)
+        outputsCount: data.outputsCount ?? 1,
+        onChange: data.onChange,
+      }}
+    >
       <div style={{ marginTop: 8, opacity: 0.8, fontSize: 12 }}>
-        Entradas: {inputs.length} (autoexpansíveis)
+        Entradas: {data.inputsCount ?? 1} (autoexpansíveis)
       </div>
-    </div>
+    </BaseIONode>
   );
 }
