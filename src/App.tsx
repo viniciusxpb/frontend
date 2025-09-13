@@ -1,6 +1,6 @@
 import { ReactFlowProvider } from "@xyflow/react";
 import FlowInner from "./flow/FlowInner";
-import "./styles/hacker.css";
+import "./styles/hacker.scss";
 import { useWsClient } from "./hooks/useWsClient";
 import { WebSocketStatus } from "./components/WebSocketStatus";
 import { buildWsUrl } from "./utils/wsUrl";
