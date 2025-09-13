@@ -1,10 +1,19 @@
-import React from "react";
+import React, { useState } from "react";
 
 type Props = {
   status: "idle" | "connecting" | "open" | "closing" | "closed";
+  onTest?: () => Promise<boolean>;
 };
 
-export function WebSocketStatus({ status }: Props) {
+export function WebSocketStatus({ status, onTest }: Props) {
+  const [testResult, setTestResult] = useState<null | "ok" | "err">(null);
+
+  const handleTest = async () => {
+    if (!onTest) return;
+    const ok = await onTest();
+    setTestResult(ok ? "ok" : "err");
+    window.setTimeout(() => setTestResult(null), 2000);
+  };
   const color =
     status === "open"
       ? "#00ff95"
@@ -37,6 +46,27 @@ export function WebSocketStatus({ status }: Props) {
       aria-live="polite"
     >
       WS: {status.toUpperCase()}
+      {onTest && (
+        <button
+          onClick={handleTest}
+          style={{
+            marginLeft: 8,
+            background: "transparent",
+            border: `1px solid ${color}`,
+            color,
+            borderRadius: 6,
+            padding: "2px 6px",
+            cursor: "pointer",
+          }}
+        >
+          test
+        </button>
+      )}
+      {testResult && (
+        <span style={{ marginLeft: 4 }}>
+          {testResult === "ok" ? "✅" : "❌"}
+        </span>
+      )}
     </div>
   );
 }

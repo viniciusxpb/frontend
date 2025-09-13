@@ -16,7 +16,7 @@ export default function App() {
 
   return (
     <ReactFlowProvider>
-      <WebSocketStatus status={client.status} />
+      <WebSocketStatus status={client.status} onTest={client.testJson} />
       <FlowInner />
     </ReactFlowProvider>
   );
