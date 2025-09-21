@@ -1,6 +1,8 @@
 /* ===================== */
 /* 💾 Vars (tema hacker) */
 /* ===================== */
+@use "sass:color";
+
 $font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 
 $color-fg: #b7f397;
@@ -102,7 +104,7 @@ $t-slow: 0.2s;
   &.ghost {
     background: transparent;
     border-color: $border-strong;
-    color: darken($color-fg, 10%);
+    color: color.scale($color-fg, $lightness: -10%);
   }
 
   &:focus-visible {
