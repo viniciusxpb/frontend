@@ -25,6 +25,8 @@ export interface UseWsClient {
   lastMessage: MessageEvent<any> | null;
   /** Última mensagem parseada como JSON (se possível). */
   lastJson: unknown | null;
+  /** Envia mensagem de teste e aguarda resposta. */
+  testJson: () => Promise<boolean>;
   /** Fechar manualmente (desativa auto-reconexão). */
   close: () => void;
 }
@@ -159,6 +161,50 @@ export function useWsClient(url: string, opts?: UseWsClientOptions): UseWsClient
     }
   };
 
+  const testJson: UseWsClient["testJson"] = () => {
+    return new Promise((resolve) => {
+      const ws = wsRef.current;
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        resolve(false);
+        return;
+      }
+
+      const reqId = `req_${Date.now()}_1`;
+      const payload = {
+        type: "test",
+        at: Date.now(),
+        payload: { hello: "ndnm", note: "ws file-roundtrip" },
+        reqId,
+      };
+
+      const handle = (ev: MessageEvent) => {
+        try {
+          const data = JSON.parse(typeof ev.data === "string" ? ev.data : "");
+          if (data.replyTo === reqId) {
+            ws.removeEventListener("message", handle);
+            resolve(data.status === "ok");
+          }
+        } catch {
+          /* ignore */
+        }
+      };
+
+      ws.addEventListener("message", handle);
+      try {
+        ws.send(JSON.stringify(payload));
+      } catch {
+        ws.removeEventListener("message", handle);
+        resolve(false);
+        return;
+      }
+
+      window.setTimeout(() => {
+        ws.removeEventListener("message", handle);
+        resolve(false);
+      }, 5000);
+    });
+  };
+
   const close = () => {
     manualCloseRef.current = true;
     stopHeartbeat();
@@ -170,5 +216,5 @@ export function useWsClient(url: string, opts?: UseWsClientOptions): UseWsClient
     } catch { /* ignore */ }
   };
 
-  return { status, send, lastMessage, lastJson, close };
+  return { status, send, lastMessage, lastJson, testJson, close };
 }
