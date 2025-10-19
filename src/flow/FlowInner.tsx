@@ -13,12 +13,12 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
-import LeftPanel from '../components/LeftPanel';
-import HackerModal from '../components/HackerModal';
-import NodeCatalog from '../components/NodeCatalog';
-import usePaneClickCombo from '../hooks/usePaneClickCombo';
+import LeftPanel from '@/components/LeftPanel';
+import HackerModal from '@/components/HackerModal';
+import NodeCatalog from '@/components/NodeCatalog';
+import usePaneClickCombo from '@/hooks/usePaneClickCombo';
 
-import { nodeTypes, nodePalette } from '../nodes/registry';
+import { nodeTypes, nodePalette } from '@/nodes/registry';
 
 /* ================= Helpers p/ entradas dinâmicas (BaseIONode em modo "n") ================= */
 type IOmode = 0 | 1 | 'n';

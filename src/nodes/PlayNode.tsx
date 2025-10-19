@@ -1,5 +1,5 @@
 import type { NodeProps } from '@xyflow/react';
-import { BaseIONode, type BaseNodeData } from './BaseIONode';
+import { BaseIONode, type BaseNodeData } from '@/nodes/BaseIONode';
 
 /**
  * Novo AddNode usando BaseIONode

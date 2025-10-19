@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import type { NodeProps } from "@xyflow/react";
-import { BaseIONode, type BaseNodeData } from "./BaseIONode";
+import { BaseIONode, type BaseNodeData } from "@/nodes/BaseIONode";
 
 type TextUpdaterData = BaseNodeData & {};
 

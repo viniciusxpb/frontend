@@ -1,6 +1,6 @@
-import { TextUpdaterNode } from './TextUpdaterNode';
-import { AddNode } from './AddNode';
-import { SubtractNode } from './SubtractNode';
+import { TextUpdaterNode } from '@/nodes/TextUpdaterNode';
+import { AddNode } from '@/nodes/AddNode';
+import { SubtractNode } from '@/nodes/SubtractNode';
 
 export type NodeTypeKey = 'textUpdater' | 'add' | 'subtract';
 

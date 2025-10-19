@@ -1,9 +1,9 @@
-import { ReactFlowProvider } from "@xyflow/react";
-import FlowInner from "@/flow/FlowInner";
-import "./styles/hacker.scss";
-import { useWsClient } from "./hooks/useWsClient";
-import { WebSocketStatus } from "./components/WebSocketStatus";
-import { buildWsUrl } from "./utils/wsUrl";
+import { ReactFlowProvider } from '@xyflow/react';
+import FlowInner from '@/flow/FlowInner';
+import '@/styles/hacker.scss';
+import { useWsClient } from '@/hooks/useWsClient';
+import { WebSocketStatus } from '@/components/WebSocketStatus';
+import { buildWsUrl } from '@/utils/wsUrl';
 
 export default function App() {
   const WS_URL = buildWsUrl();

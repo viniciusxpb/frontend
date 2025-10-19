@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { nodePalette } from '../nodes/registry';
+import { nodePalette } from '@/nodes/registry';
 
 type Props = {
   onPick: (type: string) => void;
