@@ -1,5 +1,6 @@
 // src/flow/FlowController.tsx
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
+import type { Node, Edge } from '@xyflow/react';
 import LeftPanel from '@/components/LeftPanel';
 import HackerModal from '@/components/HackerModal';
 import NodeCatalog from '@/components/NodeCatalog';
@@ -9,7 +10,11 @@ import { useFlowInteraction } from '@/hooks/useFlowInteraction';
 import { useWorkspacePersistence } from '@/hooks/useWorkspacePersistence';
 import { FlowCanvas } from './FlowCanvas';
 
-export default function FlowController() {
+type FlowControllerProps = {
+  onReassignNodeData?: (nodes: Node[]) => Node[];
+};
+
+export default function FlowController({ onReassignNodeData }: FlowControllerProps) {
   const [workspaceName, setWorkspaceName] = useState('workspace-1');
   const nodePalette = useNodePalette();
   const { nodes, edges, setNodes, setEdges, onNodesChange, onEdgesChange, onConnect } = useFlowStateSync();
@@ -20,6 +25,42 @@ export default function FlowController() {
   } = useFlowInteraction({ nodes, edges, setNodes, setEdges, nodePalette });
   const { saveWorkspace, loadWorkspace } = useWorkspacePersistence();
 
+  // Função que atualiza os valores dos nós
+  const handleNodeValueChange = useCallback((nodeId: string, value: string) => {
+    console.log(`📝 Atualizando node ${nodeId} para valor:`, value);
+    setNodes(nds => nds.map(node => 
+      node.id === nodeId ? { ...node, data: { ...node.data, value } } : node
+    ));
+  }, [setNodes]);
+
+  // Função para processar nós carregados do workspace
+  const handleLoadWorkspace = useCallback(async (workspaceName: string) => {
+    const data = await loadWorkspace(workspaceName);
+    if (data && data.nodes && data.edges) {
+      let processedNodes = data.nodes;
+      
+      // Aplica o reassign das funções se disponível
+      if (onReassignNodeData) {
+        processedNodes = onReassignNodeData(data.nodes);
+      } else {
+        // Fallback: reassign local se a prop não foi passada
+        processedNodes = data.nodes.map(node => ({
+          ...node,
+          data: {
+            ...node.data,
+            onChange: handleNodeValueChange
+          }
+        }));
+      }
+      
+      setNodes(processedNodes);
+      setEdges(data.edges);
+      console.log('✅ Workspace carregado com nós processados:', processedNodes);
+      return true;
+    }
+    return false;
+  }, [loadWorkspace, setNodes, setEdges, onReassignNodeData, handleNodeValueChange]);
+
   const handleSaveWorkspace = async () => {
     const success = await saveWorkspace(workspaceName, nodes, edges);
     if (success) {
@@ -29,29 +70,39 @@ export default function FlowController() {
     }
   };
 
-  const handleLoadWorkspace = async () => {
-    const data = await loadWorkspace(workspaceName);
-    if (data && data.nodes && data.edges) {
-      setNodes(data.nodes);
-      setEdges(data.edges);
-      alert(`✅ Workspace "${workspaceName}" carregado!`);
+  // Handler para quando o LeftPanel carrega um workspace
+  const handleLoadWorkspaceFromPanel = useCallback((newNodes: Node[], newEdges: Edge[]) => {
+    let processedNodes = newNodes;
+    
+    // Aplica o reassign das funções se disponível
+    if (onReassignNodeData) {
+      processedNodes = onReassignNodeData(newNodes);
     } else {
-      alert(`❌ Workspace não encontrado`);
+      // Fallback: reassign local
+      processedNodes = newNodes.map(node => ({
+        ...node,
+        data: {
+          ...node.data,
+          onChange: handleNodeValueChange
+        }
+      }));
     }
-  };
+    
+    setNodes(processedNodes);
+    setEdges(newEdges);
+    console.log('🎯 Workspace carregado via LeftPanel:', processedNodes);
+  }, [setNodes, setEdges, onReassignNodeData, handleNodeValueChange]);
 
   return (
     <>
       <div className="globalWrapper">
         <LeftPanel 
-  onOpenModal={() => setIsModalOpen(true)}
-  nodes={nodes}
-  edges={edges}
-  onLoadWorkspace={(newNodes, newEdges) => {
-    setNodes(newNodes);
-    setEdges(newEdges);
-  }}
-/>
+          onOpenModal={() => setIsModalOpen(true)}
+          nodes={nodes}
+          edges={edges}
+          onLoadWorkspace={handleLoadWorkspaceFromPanel}
+          onReassignNodeData={onReassignNodeData}
+        />
         <FlowCanvas
           nodes={nodes}
           edges={edges}

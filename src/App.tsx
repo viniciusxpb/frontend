@@ -1,30 +1,45 @@
+// src/App.tsx
 import { ReactFlowProvider } from '@xyflow/react';
-// Importa o novo controller em vez do FlowInner
 import FlowController from '@/flow/FlowController';
 import '@/styles/hacker.scss';
-import '@/style.scss'; // Garante que o estilo base também é importado
+import '@/style.scss';
 import { useWsClient } from '@/hooks/useWsClient';
 import { WebSocketStatus } from '@/components/WebSocketStatus';
 import { buildWsUrl } from '@/utils/wsUrl';
+import { useCallback } from 'react';
+import type { Node } from '@xyflow/react';
 
 export default function App() {
   const WS_URL = buildWsUrl();
 
-  // Mantém a instância do useWsClient aqui para o status global,
-  // os hooks internos criarão suas próprias conexões se necessário,
-  // ou podemos passar este 'client' via props/context no futuro.
   const client = useWsClient(WS_URL, {
     autoreconnect: true,
-    heartbeatMs: 25000, // Reabilita o heartbeat aqui se desabilitado nos hooks internos
+    heartbeatMs: 25000,
     debug: true,
   });
 
+  // Função para reassignar o onChange nos nós carregados do workspace
+  const handleReassignNodeData = useCallback((nodes: Node[]): Node[] => {
+    console.log('🔄 Reassignando node data para nós carregados...');
+    
+    return nodes.map(node => ({
+      ...node,
+      data: {
+        ...node.data,
+        // Reassigna a função onChange que foi perdida na serialização
+        onChange: (nodeId: string, value: string) => {
+          console.log(`📝 [App] Atualizando node ${nodeId} para valor:`, value);
+          // Esta função será implementada no FlowController
+        }
+      }
+    }));
+  }, []);
+
   return (
-    // ReactFlowProvider continua envolvendo tudo
     <ReactFlowProvider>
       <WebSocketStatus status={client.status} />
-      {/* Usa o novo FlowController */}
-      <FlowController />
+      {/* Passa a função de reassign para o FlowController */}
+      <FlowController onReassignNodeData={handleReassignNodeData} />
     </ReactFlowProvider>
   );
 }

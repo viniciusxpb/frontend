@@ -26,13 +26,7 @@ type BaseProps = NodeProps<BaseNodeData> & { children?: React.ReactNode };
 
 export function BaseIONode({ id, data, children }: BaseProps) {
   console.log(`\n[BaseIONode ${id}] ========== RENDER START ==========`);
-  console.log(`[BaseIONode ${id}] data COMPLETA (JSON.stringify):`, JSON.stringify(data, null, 2));
-  console.log(`[BaseIONode ${id}] data.label:`, data.label);
-  console.log(`[BaseIONode ${id}] data.inputsMode:`, data.inputsMode, `(type: ${typeof data.inputsMode})`);
-  console.log(`[BaseIONode ${id}] data.outputsMode:`, data.outputsMode, `(type: ${typeof data.outputsMode})`);
-  console.log(`[BaseIONode ${id}] data.input_fields (raw):`, data.input_fields);
-  console.log(`[BaseIONode ${id}] data.input_fields type:`, typeof data.input_fields);
-  console.log(`[BaseIONode ${id}] data.input_fields is Array.isArray():`, Array.isArray(data.input_fields));
+  console.log(`[BaseIONode ${id}] data.value:`, data.value);
   console.log(`[BaseIONode ${id}] data.onChange exists:`, !!data.onChange);
   console.log(`[BaseIONode ${id}] data.onChange type:`, typeof data.onChange);
 
@@ -45,40 +39,19 @@ export function BaseIONode({ id, data, children }: BaseProps) {
   const outOffsetY = 0;
 
   const firstTextInputField = useMemo(() => {
-    console.log(`\n[BaseIONode ${id}] useMemo START`);
-    console.log(`[BaseIONode ${id}] input_fields no useMemo:`, data.input_fields);
-    
     if (!data.input_fields) {
-      console.log(`[BaseIONode ${id}] ❌ input_fields é falsy (null/undefined/etc)`);
       return undefined;
     }
-
-    console.log(`[BaseIONode ${id}] input_fields passou no falsy check`);
 
     if (!Array.isArray(data.input_fields)) {
-      console.log(`[BaseIONode ${id}] ❌ input_fields NÃO é array! É:`, typeof data.input_fields, data.input_fields);
       return undefined;
     }
 
-    console.log(`[BaseIONode ${id}] ✅ input_fields é um array com ${data.input_fields.length} items`);
-    console.log(`[BaseIONode ${id}] Items do array:`, data.input_fields.map((f) => `{name:"${f.name}", type:"${f.type}"}`));
+    return data.input_fields.find((f) => f.type === 'text');
+  }, [data.input_fields]);
 
-    const field = data.input_fields.find((f) => {
-      console.log(`[BaseIONode ${id}]   → Procurando... f.type="${f.type}" === "text"?`, f.type === 'text');
-      return f.type === 'text';
-    });
-
-    console.log(`[BaseIONode ${id}] ✅ Field encontrado:`, field);
-    return field;
-  }, [data.input_fields, id]);
-
-  console.log(`[BaseIONode ${id}] firstTextInputField (após useMemo):`, firstTextInputField);
-  console.log(`[BaseIONode ${id}] typeof data.onChange:`, typeof data.onChange);
-  
-  const showValueInput = !!firstTextInputField && typeof data.onChange === 'function';
-  console.log(`[BaseIONode ${id}] showValueInput = !!firstTextInputField && typeof data.onChange === 'function'`);
-  console.log(`[BaseIONode ${id}]              = !!${!!firstTextInputField} && ${typeof data.onChange === 'function'}`);
-  console.log(`[BaseIONode ${id}]              = ${showValueInput}`);
+  const showValueInput = !!firstTextInputField;
+  console.log(`[BaseIONode ${id}] showValueInput:`, showValueInput);
   console.log(`[BaseIONode ${id}] ========== RENDER END ==========\n`);
 
   return (
@@ -106,7 +79,7 @@ export function BaseIONode({ id, data, children }: BaseProps) {
           </div>
         ) : (
           <div style={{ marginTop: '4px', fontSize: '11px', opacity: 0.5, color: '#888' }}>
-            (showValueInput = {String(showValueInput)})
+            (sem input fields de texto)
           </div>
         )}
         {children}

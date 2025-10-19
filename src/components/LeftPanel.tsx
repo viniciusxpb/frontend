@@ -8,9 +8,10 @@ type Props = {
   nodes: Node[];
   edges: Edge[];
   onLoadWorkspace: (nodes: Node[], edges: Edge[]) => void;
+  onReassignNodeData?: (nodes: Node[]) => Node[];
 };
 
-export default function LeftPanel({ onOpenModal, nodes, edges, onLoadWorkspace }: Props) {
+export default function LeftPanel({ onOpenModal, nodes, edges, onLoadWorkspace, onReassignNodeData }: Props) {
   const [workspaceName, setWorkspaceName] = useState('workspace-1');
   const { saveWorkspace, loadWorkspace } = useWorkspacePersistence();
 
@@ -24,11 +25,28 @@ export default function LeftPanel({ onOpenModal, nodes, edges, onLoadWorkspace }
   };
 
   const handleLoadWorkspace = async () => {
+    console.log('🔄 Iniciando carregamento do workspace...');
+    console.log('📁 Nome do workspace:', workspaceName);
+
     const data = await loadWorkspace(workspaceName);
+    console.log('📦 Dados retornados do loadWorkspace:', data);
+
     if (data && data.nodes && data.edges) {
-      onLoadWorkspace(data.nodes, data.edges);
+      console.log('✅ Dados válidos encontrados, carregando...');
+      
+      // AQUI ESTÁ A SOLUÇÃO: Reassignar as funções perdidas
+      let nodesToLoad = data.nodes;
+      if (onReassignNodeData) {
+        nodesToLoad = onReassignNodeData(data.nodes);
+        console.log('🔄 Nós modificados com onReassignNodeData:', nodesToLoad);
+      }
+      
+      console.log('📊 Número de nodes:', nodesToLoad.length);
+      console.log('📊 Número de edges:', data.edges.length);
+      onLoadWorkspace(nodesToLoad, data.edges);
       alert(`✅ Workspace "${workspaceName}" carregado!`);
     } else {
+      console.log('❌ Dados inválidos ou não encontrados');
       alert(`❌ Workspace não encontrado`);
     }
   };
