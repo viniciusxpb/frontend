@@ -1,3 +1,4 @@
+// src/flow/FlowInner.tsx
 import { useState, useCallback, useRef, useEffect } from 'react';
 import {
   ReactFlow,
@@ -17,59 +18,39 @@ import LeftPanel from '@/components/LeftPanel';
 import HackerModal from '@/components/HackerModal';
 import NodeCatalog from '@/components/NodeCatalog';
 import usePaneClickCombo from '@/hooks/usePaneClickCombo';
+import { nodeTypes, type NodePaletteItem } from '@/nodes/registry'; // Importa tipos e componentes
+import { useWsClient } from '@/hooks/useWsClient';
+import { buildWsUrl } from '@/utils/wsUrl';
 
-import { nodeTypes, nodePalette } from '@/nodes/registry';
-
-/* ================= Helpers p/ entradas dinâmicas (BaseIONode em modo "n") ================= */
+// Helpers para entradas dinâmicas (sem alterações)
 type IOmode = 0 | 1 | 'n';
-
 function isDynInputsNode(n: Node) {
   const m: IOmode | undefined = (n.data as any)?.inputsMode;
   return m === 'n';
 }
-
 function normalizeDynCounts(node: Node, edges: Edge[]): Node {
   if (!node || !isDynInputsNode(node)) return node;
-
   const data: any = node.data ?? {};
   const currentCount: number = Number.isFinite(data.inputsCount) ? data.inputsCount : 1;
-
-  // conta quantos handles "in_*" estão realmente usados como alvo
   const used = new Set(
     edges
       .filter((e) => e.target === node.id && e.targetHandle && String(e.targetHandle).startsWith('in_'))
       .map((e) => String(e.targetHandle))
   );
   const usedCount = used.size;
-
-  const shouldCount = Math.max(usedCount + 1, 1); // sempre manter 1 livre
-
+  const shouldCount = Math.max(usedCount + 1, 1);
   if (shouldCount !== currentCount) {
-    return {
-      ...node,
-      data: {
-        ...data,
-        inputsMode: 'n',
-        inputsCount: shouldCount,
-      },
-    };
+    return { ...node, data: { ...data, inputsMode: 'n', inputsCount: shouldCount } };
   }
   return node;
 }
-
 function normalizeAll(nodes: Node[], edges: Edge[]): Node[] {
   return nodes.map((n) => normalizeDynCounts(n, edges));
 }
-/* ========================================================================================== */
 
-// Exemplo inicial simples (TextUpdater sem handles para evitar erro #008)
-const initialNodes: Node[] = [
-  { id: 'n1', type: 'textUpdater', className: 'hacker-node', position: { x: 0, y: 0 }, data: { label: 'Node 1' } },
-  { id: 'n2', type: 'textUpdater', className: 'hacker-node', position: { x: 0, y: 100 }, data: { label: 'Node 2' } },
-];
+const initialNodes: Node[] = []; // Começa sem nodes
 const initialEdges: Edge[] = [];
 
-/** Estado temporário quando o usuário solta a conexão no pane (drop inválido) */
 type PendingConnect = {
   fromNodeId: string | null;
   fromHandleId?: string | null;
@@ -79,17 +60,41 @@ type PendingConnect = {
 export default function FlowInner() {
   const [nodes, setNodes] = useState<Node[]>(initialNodes);
   const [edges, setEdges] = useState<Edge[]>(initialEdges);
-
   const [panelPos, setPanelPos] = useState<{ x: number; y: number } | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-
   const [pendingConnect, setPendingConnect] = useState<PendingConnect | null>(null);
-
+  const [nodePalette, setNodePalette] = useState<NodePaletteItem[]>([]); // Estado para a palette dinâmica
   const { screenToFlowPosition } = useReactFlow();
   const updateNodeInternals = useUpdateNodeInternals();
-
   const [selectedNodes, setSelectedNodes] = useState<string[]>([]);
   const [selectedEdges, setSelectedEdges] = useState<string[]>([]);
+
+  const WS_URL = buildWsUrl();
+  const client = useWsClient(WS_URL, {
+    autoreconnect: true,
+    heartbeatMs: 25000,
+    debug: true,
+  });
+
+  // Efeito para processar mensagens do WebSocket e atualizar a nodePalette
+  useEffect(() => {
+    if (client.lastJson) {
+      const message = client.lastJson as any;
+      if (message?.type === 'NODE_CONFIG' && Array.isArray(message.payload)) {
+        console.log('Recebido NODE_CONFIG do backend:', message.payload);
+        const validPaletteItems = message.payload.filter(
+          (item: any): item is NodePaletteItem => // Type guard para segurança
+            typeof item.type === 'string' &&
+            typeof item.label === 'string' &&
+            // Verifica se o tipo existe no nosso mapeamento nodeTypes
+            Object.prototype.hasOwnProperty.call(nodeTypes, item.type)
+        );
+         // Ordena alfabeticamente pelo label antes de setar o estado
+        validPaletteItems.sort((a, b) => a.label.localeCompare(b.label));
+        setNodePalette(validPaletteItems);
+      }
+    }
+  }, [client.lastJson]);
 
   useOnSelectionChange({
     onChange: ({ nodes, edges }) => {
@@ -98,10 +103,10 @@ export default function FlowInner() {
     },
   });
 
-  const idRef = useRef(3);
-  const nextId = () => `${idRef.current++}`;
+  const idRef = useRef(1); // Começa em 1 para os IDs
+  const nextId = () => `n${idRef.current++}`;
 
-  /* ===== avisa o React Flow quando a quantidade de handles mudar ===== */
+  // Hook useEffect para updateNodeInternals (sem alterações)
   const prevCountsRef = useRef<Record<string, number>>({});
   useEffect(() => {
     const toUpdate: string[] = [];
@@ -119,7 +124,6 @@ export default function FlowInner() {
       toUpdate.forEach((id) => updateNodeInternals(id));
     }
   }, [nodes, updateNodeInternals]);
-  /* =================================================================== */
 
   const onNodesChange = useCallback(
     (changes) => setNodes((snap) => applyNodeChanges(changes, snap)),
@@ -143,57 +147,63 @@ export default function FlowInner() {
   }, []);
 
    const onConnectEnd = useCallback(
-    (event: MouseEvent | TouchEvent, state: any) => {
-      if (!state?.isValid) {
-        const isTouch =
-          'changedTouches' in event && event.changedTouches && event.changedTouches.length > 0;
-        const point = isTouch ? event.changedTouches[0] as any : (event as MouseEvent);
-        const pos = screenToFlowPosition({ x: (point as any).clientX, y: (point as any).clientY });
+    (event: MouseEvent | TouchEvent) => {
+        // Tenta pegar a instância do React Flow (pode não estar sempre disponível globalmente)
+        const reactFlowInstance = (event.target as Element)?.closest('.react-flow')?.['_reactFlowInstance'];
+        if (!reactFlowInstance?.connectionHandle) return;
 
-        setPendingConnect({
-          fromNodeId: state?.fromNode?.id ?? null,
-          fromHandleId: state?.fromHandleId ?? null,
-          pos,
-        });
+        const { connectingHandleId, connectingNodeId, connectingHandleType } = reactFlowInstance.connectionHandle;
+        const targetIsPane = (event.target as Element).classList.contains('react-flow__pane');
 
-        setIsModalOpen(true);
-      }
+        if (targetIsPane && connectingNodeId && connectingHandleType === 'source') {
+            const isTouch = 'changedTouches' in event && event.changedTouches && event.changedTouches.length > 0;
+            const point = isTouch ? event.changedTouches[0] : (event as MouseEvent);
+            // screenToFlowPosition precisa ser chamado aqui dentro pois depende do estado atual do hook
+            const pos = screenToFlowPosition({ x: point.clientX, y: point.clientY });
+
+            setPendingConnect({
+                fromNodeId: connectingNodeId,
+                fromHandleId: connectingHandleId,
+                pos,
+            });
+            setIsModalOpen(true);
+        }
     },
-    [screenToFlowPosition]
-  );
+    [screenToFlowPosition] // screenToFlowPosition é a dependência chave aqui
+);
 
-  // ADD pelo modal → se veio de pendingConnect, cria no drop e conecta; senão, centro da viewport
+  // Adiciona node usando a palette dinâmica
   const addNodeByType = useCallback((typeKey: string) => {
-    const spec = nodePalette.find((n) => n.type === (typeKey as any));
-    if (!spec) return;
-
-    const id = `n${nextId()}`;
-
-    const baseData: any = { ...(spec.defaultData ?? {}) };
-    // Convenção: add/subtract entram como dinâmicos
-    if ((typeKey === 'add' || typeKey === 'subtract') && baseData.inputsMode === undefined) {
-      baseData.inputsMode = 'n';
-      baseData.inputsCount = 1; // começa com 1
+    const spec = nodePalette.find((n) => n.type === typeKey);
+    if (!spec) {
+      console.error(`Tipo de node desconhecido ou não registrado no frontend: ${typeKey}`);
+      // Verifica se o tipo existe em nodeTypes mas não veio na palette (erro de config backend?)
+      if (Object.prototype.hasOwnProperty.call(nodeTypes, typeKey)) {
+         console.warn(`O tipo '${typeKey}' existe nos componentes React, mas não foi recebido na NODE_CONFIG do backend.`);
+      }
+      setIsModalOpen(false); // Fecha o modal mesmo se der erro
+      setPendingConnect(null);
+      return;
     }
 
-    if (pendingConnect) {
-      const { pos, fromNodeId, fromHandleId } = pendingConnect;
+    const id = nextId();
+    const baseData: any = JSON.parse(JSON.stringify(spec.defaultData ?? {})); // Deep clone
 
-      setNodes((nds) =>
-        normalizeAll(
-          [
-            ...nds,
-            {
-              id,
-              type: spec.type as Node['type'],
-              className: 'hacker-node',
-              position: pos,
-              data: baseData,
-            } as Node,
-          ],
-          edges
-        )
-      );
+    // Garante que o label está presente
+    if (!baseData.label) {
+      baseData.label = spec.label;
+    }
+
+    let newNodePosition = { x: 0, y: 0 };
+
+    if (pendingConnect) {
+      newNodePosition = pendingConnect.pos;
+      const { fromNodeId, fromHandleId } = pendingConnect;
+
+      setNodes((nds) => normalizeAll(
+        [...nds, { id, type: spec.type, className: 'hacker-node', position: newNodePosition, data: baseData } as Node],
+        edges
+      ));
 
       if (fromNodeId) {
         setEdges((eds) => {
@@ -202,81 +212,56 @@ export default function FlowInner() {
             source: fromNodeId,
             target: id,
             ...(fromHandleId ? { sourceHandle: String(fromHandleId) } : {}),
+            // targetHandle: 'in_0' // Assumimos in_0 por padrão para simplificar
           };
-          const next = eds.concat(newEdge);
-          setNodes((nds) => normalizeAll(nds, next));
-          return next;
+          const nextEdges = eds.concat(newEdge);
+          setNodes(nds => normalizeAll(nds, nextEdges)); // Normaliza DEPOIS de adicionar a edge
+          return nextEdges;
         });
       }
-
       setPendingConnect(null);
-      setIsModalOpen(false);
-      return;
-    }
-
-    const center = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
-    const pos = screenToFlowPosition(center);
-
-    setNodes((nds) =>
-      normalizeAll(
-        [
-          ...nds,
-          {
-            id,
-            type: spec.type as Node['type'],
-            className: 'hacker-node',
-            position: pos,
-            data: baseData,
-          } as Node,
-        ],
+    } else {
+      const center = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+      newNodePosition = screenToFlowPosition(center);
+      setNodes((nds) => normalizeAll(
+        [...nds, { id, type: spec.type, className: 'hacker-node', position: newNodePosition, data: baseData } as Node],
         edges
-      )
-    );
-
+      ));
+    }
     setIsModalOpen(false);
-  }, [edges, screenToFlowPosition, pendingConnect]);
+  }, [nodePalette, pendingConnect, screenToFlowPosition, edges]); // Depende da palette dinâmica
 
-  // Delete/Backspace remove seleção
+  // Delete/Backspace (sem alterações)
   const del = useKeyPress('Delete');
   const bsp = useKeyPress('Backspace');
   useEffect(() => {
     const pressed = del || bsp;
-    if (!pressed) return;
-    if (selectedNodes.length === 0 && selectedEdges.length === 0) return;
-
+    if (!pressed || (selectedNodes.length === 0 && selectedEdges.length === 0)) return;
     setEdges((eds) => {
-      const selE = new Set(selectedEdges);
-      const selN = new Set(selectedNodes);
-      const next = eds.filter(
-        (e) => !selE.has(e.id) && !selN.has(e.source) && !selN.has(e.target)
-      );
-      setNodes((nds) => normalizeAll(nds, next));
-      return next;
+        const next = eds.filter(e =>
+            !selectedEdges.includes(e.id) &&
+            !selectedNodes.includes(e.source) &&
+            !selectedNodes.includes(e.target)
+        );
+        setNodes(nds => normalizeAll(nds, next));
+        return next;
     });
-
-    setNodes((nds) => {
-      const selN = new Set(selectedNodes);
-      return nds.filter((n) => !selN.has(n.id));
-    });
-
+    setNodes((nds) => nds.filter((n) => !selectedNodes.includes(n.id)));
     setSelectedNodes([]);
     setSelectedEdges([]);
-  }, [del, bsp, selectedNodes, selectedEdges]);
+   }, [del, bsp, selectedNodes, selectedEdges]);
 
-  // Pane
+  // Pane (sem alterações)
   const PANEL_OFFSET_X = 280, PANEL_OFFSET_Y = 100;
   const onPaneClick = usePaneClickCombo({
     onSingle: () => setPanelPos(null),
     onDouble: (e: MouseEvent) => {
-      setPanelPos({
-        x: (e as MouseEvent).clientX - PANEL_OFFSET_X,
-        y: (e as MouseEvent).clientY - PANEL_OFFSET_Y,
-      });
+      setPanelPos({ x: e.clientX - PANEL_OFFSET_X, y: e.clientY - PANEL_OFFSET_Y });
     },
   });
 
+  // Fechar Modal (sem alterações)
   const handleCloseModal = useCallback(() => {
-    // se o usuário fechar sem escolher, descarta o pendingConnect
     setPendingConnect(null);
     setIsModalOpen(false);
   }, []);
@@ -285,19 +270,20 @@ export default function FlowInner() {
     <>
       <div className="globalWrapper">
         <LeftPanel onOpenModal={() => setIsModalOpen(true)} />
-
         <div className="mainBoard">
           <ReactFlow
             colorMode="dark"
             nodes={nodes}
             edges={edges}
-            nodeTypes={nodeTypes}
+            nodeTypes={nodeTypes} // Usa o mapeamento de componentes React
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
             onConnectEnd={onConnectEnd}
             onPaneClick={onPaneClick}
             fitView
+            // Garante que a instância seja acessível globalmente (solução temporária para onConnectEnd)
+            onInit={(instance) => ((window as any).reactFlowInstance = instance)}
           >
             {panelPos && (
               <Panel style={{ left: panelPos.x, top: panelPos.y, position: 'absolute' }}>
@@ -310,9 +296,9 @@ export default function FlowInner() {
           </ReactFlow>
         </div>
       </div>
-
       <HackerModal open={isModalOpen} onClose={handleCloseModal}>
-        <NodeCatalog onPick={addNodeByType} />
+        {/* Passa a palette dinâmica para o NodeCatalog */}
+        <NodeCatalog onPick={addNodeByType} nodePalette={nodePalette} />
       </HackerModal>
     </>
   );
