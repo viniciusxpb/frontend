@@ -62,7 +62,7 @@ const initialEdges: Edge[] = [];
 
 type PendingConnect = {
   fromNodeId: string | null;
-  fromHandleId?: string | null;
+  fromHandleId: string | null; // Tornamos não opcional para garantir que sempre temos
   pos: { x: number; y: number };
 };
 
@@ -77,6 +77,8 @@ export default function FlowInner() {
   const updateNodeInternals = useUpdateNodeInternals();
   const [selectedNodes, setSelectedNodes] = useState<string[]>([]);
   const [selectedEdges, setSelectedEdges] = useState<string[]>([]);
+  const connectingNodeId = useRef<string | null>(null); // Ref para guardar o nó de origem da conexão
+  const connectingHandleId = useRef<string | null>(null); // Ref para guardar o handle de origem
 
   const WS_URL = buildWsUrl();
   const client = useWsClient(WS_URL, {
@@ -105,6 +107,8 @@ export default function FlowInner() {
     nodePalette.forEach(item => {
       types[item.type] = BaseIONode;
     });
+    // Adiciona um tipo 'default' caso algum nó não mapeado apareça (segurança)
+    types['default'] = BaseIONode;
     return types;
   }, [nodePalette]);
 
@@ -150,6 +154,9 @@ export default function FlowInner() {
 
   const onConnect = useCallback(
     (connection: Connection) => {
+      // Limpa as refs de conexão pendente se a conexão foi bem-sucedida
+      connectingNodeId.current = null;
+      connectingHandleId.current = null;
       setEdges((eds) => addEdge(connection, eds));
     },
     [setEdges]
@@ -159,31 +166,37 @@ export default function FlowInner() {
     setNodes((nds) => normalizeAll(nds, edges));
   }, [edges, setNodes]);
 
-  // CORREÇÃO: Removi o comentário placeholder inválido
-  const onConnectEnd = useCallback((event: MouseEvent | TouchEvent) => {
-        const reactFlowWrapper = (event.target as Element)?.closest('.react-flow');
-        if (!reactFlowWrapper) return;
-        const reactFlowInstance = (reactFlowWrapper as any)._reactFlowInstance;
-        if (!reactFlowInstance?.connectionHandle) return;
+  // Guarda o nó/handle de origem quando a conexão *começa*
+  const onConnectStart = useCallback((_: any, { nodeId, handleId }: { nodeId: string | null, handleId: string | null }) => {
+    connectingNodeId.current = nodeId;
+    connectingHandleId.current = handleId;
+  }, []);
 
-        const { connectingHandleId, connectingNodeId, connectingHandleType } = reactFlowInstance.connectionHandle;
-        const targetIsPane = (event.target as Element).classList.contains('react-flow__pane');
+  // Verifica se a conexão terminou no painel e abre o modal
+  const onConnectEnd = useCallback(
+    (event: MouseEvent | TouchEvent) => {
+      const targetIsPane = (event.target as Element).classList.contains('react-flow__pane');
 
-        if (targetIsPane && connectingNodeId && connectingHandleType === 'source') {
-            const isTouch = 'changedTouches' in event && event.changedTouches && event.changedTouches.length > 0;
-            const point = isTouch ? event.changedTouches[0] : (event as MouseEvent);
-            const pos = screenToFlowPosition({ x: point.clientX, y: point.clientY });
+      // Verifica se temos um nó/handle de origem e se soltou no painel
+      if (targetIsPane && connectingNodeId.current && connectingHandleId.current) {
+        const isTouch = 'changedTouches' in event && event.changedTouches && event.changedTouches.length > 0;
+        const point = isTouch ? event.changedTouches[0] : (event as MouseEvent);
+        const pos = screenToFlowPosition({ x: point.clientX, y: point.clientY });
 
-            setPendingConnect({
-                fromNodeId: connectingNodeId,
-                fromHandleId: connectingHandleId,
-                pos,
-            });
-            setIsModalOpen(true);
-        }
-    }, [screenToFlowPosition]); // Mantém a dependência correta
+        setPendingConnect({
+          fromNodeId: connectingNodeId.current,
+          fromHandleId: connectingHandleId.current, // Guarda o handle de origem
+          pos,
+        });
+        setIsModalOpen(true);
+      }
+      // Limpa as refs após a tentativa de conexão, sucedida ou não
+      connectingNodeId.current = null;
+      connectingHandleId.current = null;
+    },
+    [screenToFlowPosition]
+  );
 
-  // CORREÇÃO: Removi o comentário placeholder inválido
   const addNodeByType = useCallback((typeKey: string) => {
     const spec = nodePalette.find((n) => n.type === typeKey);
 
@@ -193,8 +206,6 @@ export default function FlowInner() {
        setPendingConnect(null);
        return;
     }
-    // Verificamos se o tipo existe no dynamicNodeTypes (que agora depende da palette)
-    // Se chegou aqui, a spec existe, então o dynamicNodeTypes[typeKey] existirá.
 
     const id = nextId();
     const baseData: any = JSON.parse(JSON.stringify(spec.defaultData ?? {}));
@@ -222,30 +233,37 @@ export default function FlowInner() {
       newNode.position = newNodePosition;
       const { fromNodeId, fromHandleId } = pendingConnect;
 
-      setNodes((nds) => normalizeAll([...nds, newNode], edges));
+      // Adiciona o novo nó primeiro
+      setNodes((nds) => [...nds, newNode]); // Não precisa normalizar aqui ainda
 
-      if (fromNodeId) {
+      // Se veio de uma conexão pendente válida, cria a edge
+      if (fromNodeId && fromHandleId) {
+        // Assume que a primeira entrada ('in_0') é o alvo padrão
+        const targetHandleId = 'in_0';
         setEdges((eds) => {
           const newEdge: Edge = {
             id: `e-${fromNodeId}-${id}-${Date.now()}`,
             source: fromNodeId,
             target: id,
-            ...(fromHandleId ? { sourceHandle: String(fromHandleId) } : {}),
+            sourceHandle: fromHandleId, // Usa o handle de origem que guardamos
+            targetHandle: targetHandleId, // Conecta na primeira entrada por padrão
           };
-          const nextEdges = eds.concat(newEdge);
-          setNodes(nds => normalizeAll(nds, nextEdges));
-          return nextEdges;
+          // Retorna as edges antigas + a nova
+          return [...eds, newEdge];
         });
+         // A normalização será feita pelo useEffect [edges]
       }
-      setPendingConnect(null);
+      setPendingConnect(null); // Limpa o estado pendente DEPOIS de usar
     } else {
+      // Adiciona no centro se não veio de conexão pendente
       const center = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
       newNodePosition = screenToFlowPosition(center);
       newNode.position = newNodePosition;
-      setNodes((nds) => normalizeAll([...nds, newNode], edges));
+      setNodes((nds) => [...nds, newNode]); // Adiciona (normalização via useEffect)
     }
-    setIsModalOpen(false);
-  }, [nodePalette, pendingConnect, screenToFlowPosition, edges, setNodes, setEdges]); // Mantém as dependências corretas
+    setIsModalOpen(false); // Fecha o modal
+  }, [nodePalette, pendingConnect, screenToFlowPosition, edges, setNodes, setEdges]); // Inclui setNodes/setEdges
+
 
   const del = useKeyPress('Delete');
   const bsp = useKeyPress('Backspace');
@@ -256,6 +274,8 @@ export default function FlowInner() {
     const selectedNodeIds = new Set(selectedNodes);
     const selectedEdgeIds = new Set(selectedEdges);
 
+    // IMPORTANTE: A normalização agora acontece automaticamente no useEffect [edges]
+    // então só precisamos remover os itens selecionados.
     setEdges((eds) => eds.filter(e =>
         !selectedEdgeIds.has(e.id) &&
         !selectedNodeIds.has(e.source) &&
@@ -276,6 +296,9 @@ export default function FlowInner() {
   });
 
   const handleCloseModal = useCallback(() => {
+    // Limpa refs e estado se o modal for fechado sem escolher
+    connectingNodeId.current = null;
+    connectingHandleId.current = null;
     setPendingConnect(null);
     setIsModalOpen(false);
   }, []);
@@ -293,6 +316,7 @@ export default function FlowInner() {
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
+            onConnectStart={onConnectStart} // Adiciona o handler onConnectStart
             onConnectEnd={onConnectEnd}
             onPaneClick={onPaneClick}
             fitView
