@@ -1,3 +1,4 @@
+// src/hooks/useFlowInteraction.ts
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useReactFlow, useKeyPress, type Node, type Edge } from '@xyflow/react';
 import { type NodePaletteItem } from '@/nodes/registry';
@@ -58,8 +59,15 @@ export function useFlowInteraction({ nodes, edges, setNodes, setEdges, nodePalet
     const spec = nodePalette.find((n) => n.type === typeKey);
     if (!spec) { setIsModalOpen(false); setPendingConnect(null); return; }
     const id = nextId();
-    const baseData: any = JSON.parse(JSON.stringify(spec.defaultData ?? {}));
-    if (!baseData.label) { baseData.label = spec.label; }
+    const baseData: any = JSON.parse(JSON.stringify(spec.default_data ?? {}));
+if (!baseData.label) { baseData.label = spec.label; }
+baseData.onChange = (nodeId: string, value: string) => {
+  setNodes((nds) =>
+    nds.map((n) =>
+      n.id === nodeId ? { ...n, data: { ...n.data, value } } : n
+    )
+  );
+};
     baseData.inputsMode = normalizeIOMode(baseData.inputsMode);
     baseData.outputsMode = normalizeIOMode(baseData.outputsMode);
     if (baseData.inputsMode === 'n') baseData.inputsCount = Math.max(baseData.inputsCount ?? 1, 1);
@@ -108,13 +116,25 @@ export function useFlowInteraction({ nodes, edges, setNodes, setEdges, nodePalet
   });
 
   const handleCloseModal = useCallback(() => {
-    connectingNodeId.current = null; connectingHandleId.current = null;
-    setPendingConnect(null); setIsModalOpen(false);
+    connectingNodeId.current = null;
+    connectingHandleId.current = null;
+    setPendingConnect(null);
+    setIsModalOpen(false);
   }, []);
 
   return {
-    isModalOpen, panelPos, selectedNodes, selectedEdges,
-    setIsModalOpen, setPanelPos, setSelectedNodes, setSelectedEdges,
-    onConnectStart, onConnectEnd, addNodeByType, onPaneClick, handleCloseModal
+    isModalOpen,
+    panelPos,
+    selectedNodes,
+    selectedEdges,
+    setIsModalOpen,
+    setPanelPos,
+    setSelectedNodes,
+    setSelectedEdges,
+    onConnectStart,
+    onConnectEnd,
+    addNodeByType,
+    onPaneClick,
+    handleCloseModal,
   };
 }

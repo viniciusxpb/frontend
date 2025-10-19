@@ -4,5 +4,5 @@
 export interface NodePaletteItem {
   type: string;
   label: string;
-  defaultData: any;
+  default_data: any;
 }

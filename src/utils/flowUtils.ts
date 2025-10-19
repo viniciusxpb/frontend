@@ -12,9 +12,9 @@ export function isDynOutputsNode(n: Node): boolean {
   return m === 'n';
 }
 
-export function normalizeIOMode(mode: string | undefined): IOmode {
-    if (mode === '0') return 0;
-    if (mode === '1') return 1;
+export function normalizeIOMode(mode: string | number | undefined): IOmode {
+    if (mode === '0' || mode === 0) return 0;
+    if (mode === '1' || mode === 1) return 1;
     if (mode === 'n') return 'n';
     return 1;
 }

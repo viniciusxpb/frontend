@@ -243,7 +243,7 @@ export default function FlowInner() {
     }
 
     const id = nextId();
-    const baseData: any = JSON.parse(JSON.stringify(spec.defaultData ?? {}));
+    const baseData: any = JSON.parse(JSON.stringify(spec.default_data ?? {}));
 
     if (!baseData.label) {
       baseData.label = spec.label;

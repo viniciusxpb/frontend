@@ -1,10 +1,10 @@
-import { useMemo } from "react";
-import type { NodeProps } from "@xyflow/react";
-import { Handle, Position, NodeToolbar, useConnection } from "@xyflow/react";
+// src/nodes/BaseIONode.tsx
+import { useMemo } from 'react';
+import type { NodeProps } from '@xyflow/react';
+import { Handle, Position, NodeToolbar, useConnection } from '@xyflow/react';
 
-type IOmode = 0 | 1 | "n";
+type IOmode = 0 | 1 | 'n';
 
-// Adicionando a interface que faltou
 interface InputField {
   name: string;
   type: string;
@@ -25,37 +25,61 @@ export interface BaseNodeData {
 type BaseProps = NodeProps<BaseNodeData> & { children?: React.ReactNode };
 
 export function BaseIONode({ id, data, children }: BaseProps) {
+  console.log(`\n[BaseIONode ${id}] ========== RENDER START ==========`);
+  console.log(`[BaseIONode ${id}] data COMPLETA (JSON.stringify):`, JSON.stringify(data, null, 2));
+  console.log(`[BaseIONode ${id}] data.label:`, data.label);
+  console.log(`[BaseIONode ${id}] data.inputsMode:`, data.inputsMode, `(type: ${typeof data.inputsMode})`);
+  console.log(`[BaseIONode ${id}] data.outputsMode:`, data.outputsMode, `(type: ${typeof data.outputsMode})`);
+  console.log(`[BaseIONode ${id}] data.input_fields (raw):`, data.input_fields);
+  console.log(`[BaseIONode ${id}] data.input_fields type:`, typeof data.input_fields);
+  console.log(`[BaseIONode ${id}] data.input_fields is Array.isArray():`, Array.isArray(data.input_fields));
+  console.log(`[BaseIONode ${id}] data.onChange exists:`, !!data.onChange);
+  console.log(`[BaseIONode ${id}] data.onChange type:`, typeof data.onChange);
+
   const connection = useConnection();
   const isTargetOrigin = connection.inProgress && connection.fromNode?.id === id;
 
-  // --- DEBUG: Comenta os useMemo e usa valores fixos ---
-  // const inputsMode = data.inputsMode ?? 1;
-  // const outputsMode = data.outputsMode ?? 1;
+  const inCount = 1;
+  const outCount = 1;
+  const inOffsetY = 0;
+  const outOffsetY = 0;
 
-  // const inCount = useMemo(() => {
-  //   if (inputsMode === 0) return 0;
-  //   if (inputsMode === 1) return 1;
-  //   return Math.max(data.inputsCount ?? 1, 1);
-  // }, [inputsMode, data.inputsCount]);
+  const firstTextInputField = useMemo(() => {
+    console.log(`\n[BaseIONode ${id}] useMemo START`);
+    console.log(`[BaseIONode ${id}] input_fields no useMemo:`, data.input_fields);
+    
+    if (!data.input_fields) {
+      console.log(`[BaseIONode ${id}] ❌ input_fields é falsy (null/undefined/etc)`);
+      return undefined;
+    }
 
-  // const outCount = useMemo(() => {
-  //   if (outputsMode === 0) return 0;
-  //   if (outputsMode === 1) return 1;
-  //   return Math.max(data.outputsCount ?? 1, 1);
-  // }, [outputsMode, data.outputsCount]);
+    console.log(`[BaseIONode ${id}] input_fields passou no falsy check`);
 
-  const inCount = 1; // Fixo para debug
-  const outCount = 1; // Fixo para debug
-  // --- FIM DEBUG ---
+    if (!Array.isArray(data.input_fields)) {
+      console.log(`[BaseIONode ${id}] ❌ input_fields NÃO é array! É:`, typeof data.input_fields, data.input_fields);
+      return undefined;
+    }
 
-  const inOffsetY = 0; // Fixo para debug
-  const outOffsetY = 0; // Fixo para debug
+    console.log(`[BaseIONode ${id}] ✅ input_fields é um array com ${data.input_fields.length} items`);
+    console.log(`[BaseIONode ${id}] Items do array:`, data.input_fields.map((f) => `{name:"${f.name}", type:"${f.type}"}`));
 
-  const firstTextInputField = useMemo(() =>
-    data.input_fields?.find(field => field.type === 'text')
-  , [data.input_fields]);
+    const field = data.input_fields.find((f) => {
+      console.log(`[BaseIONode ${id}]   → Procurando... f.type="${f.type}" === "text"?`, f.type === 'text');
+      return f.type === 'text';
+    });
 
-  const showValueInput = firstTextInputField && typeof data.onChange === 'function';
+    console.log(`[BaseIONode ${id}] ✅ Field encontrado:`, field);
+    return field;
+  }, [data.input_fields, id]);
+
+  console.log(`[BaseIONode ${id}] firstTextInputField (após useMemo):`, firstTextInputField);
+  console.log(`[BaseIONode ${id}] typeof data.onChange:`, typeof data.onChange);
+  
+  const showValueInput = !!firstTextInputField && typeof data.onChange === 'function';
+  console.log(`[BaseIONode ${id}] showValueInput = !!firstTextInputField && typeof data.onChange === 'function'`);
+  console.log(`[BaseIONode ${id}]              = !!${!!firstTextInputField} && ${typeof data.onChange === 'function'}`);
+  console.log(`[BaseIONode ${id}]              = ${showValueInput}`);
+  console.log(`[BaseIONode ${id}] ========== RENDER END ==========\n`);
 
   return (
     <>
@@ -63,22 +87,27 @@ export function BaseIONode({ id, data, children }: BaseProps) {
         <button className="xy-theme__button">cut</button>
         <button className="xy-theme__button">copy</button>
         <button className="xy-theme__button">
-          <img src="/src/assets/icons/wire_cutter.svg" alt="Wire Cutter" style={{ width: 16, height: 16 }}/>
+          <img src="/src/assets/icons/wire_cutter.svg" alt="Wire Cutter" style={{ width: 16, height: 16 }} />
         </button>
       </NodeToolbar>
       <div className="hacker-node base-io">
-        <strong>{data.label ?? "Node"}</strong>
-        {showValueInput && (
-            <div style={{ marginTop: '4px' }}>
-              <input
-                id={`${id}-${firstTextInputField!.name}`}
-                type="text"
-                value={data.value ?? ""}
-                className="nodrag"
-                onChange={(e) => data.onChange?.(id, e.target.value)}
-                style={{ display: 'block', width: 'calc(100% - 10px)' }}
-              />
-            </div>
+        <strong>{data.label ?? 'Node'}</strong>
+        {showValueInput ? (
+          <div style={{ marginTop: '4px' }}>
+            <input
+              id={`${id}-${firstTextInputField!.name}`}
+              type="text"
+              value={data.value ?? ''}
+              className="nodrag"
+              onChange={(e) => data.onChange?.(id, e.target.value)}
+              placeholder={`Enter ${firstTextInputField!.name}...`}
+              style={{ display: 'block', width: 'calc(100% - 10px)', padding: '4px' }}
+            />
+          </div>
+        ) : (
+          <div style={{ marginTop: '4px', fontSize: '11px', opacity: 0.5, color: '#888' }}>
+            (showValueInput = {String(showValueInput)})
+          </div>
         )}
         {children}
 
