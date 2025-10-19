@@ -17,9 +17,17 @@ type UseFlowInteractionProps = {
   setNodes: React.Dispatch<React.SetStateAction<Node[]>>;
   setEdges: React.Dispatch<React.SetStateAction<Edge[]>>;
   nodePalette: NodePaletteItem[];
+  onNodeValueChange: (nodeId: string, value: string) => void; // 🔥 NOVA PROP
 };
 
-export function useFlowInteraction({ nodes, edges, setNodes, setEdges, nodePalette }: UseFlowInteractionProps) {
+export function useFlowInteraction({ 
+  nodes, 
+  edges, 
+  setNodes, 
+  setEdges, 
+  nodePalette,
+  onNodeValueChange // 🔥 RECEBE A FUNÇÃO DO FLOWCONTROLLER
+}: UseFlowInteractionProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [pendingConnect, setPendingConnect] = useState<PendingConnect | null>(null);
   const [panelPos, setPanelPos] = useState<{ x: number; y: number } | null>(null);
@@ -28,8 +36,18 @@ export function useFlowInteraction({ nodes, edges, setNodes, setEdges, nodePalet
   const connectingNodeId = useRef<string | null>(null);
   const connectingHandleId = useRef<string | null>(null);
   const { screenToFlowPosition } = useReactFlow();
-  const idRef = useRef(1);
-  const nextId = () => `n${idRef.current++}`;
+  
+  // 🔥 CORREÇÃO: Geração de ID baseada no maior ID existente
+  const nextId = useCallback(() => {
+    if (nodes.length === 0) return 'n1';
+    
+    const maxId = Math.max(...nodes.map(node => {
+      const match = node.id.match(/n(\d+)/);
+      return match ? parseInt(match[1]) : 0;
+    }));
+    
+    return `n${maxId + 1}`;
+  }, [nodes]);
 
   const onConnectStart = useCallback((_: any, { nodeId, handleId }: { nodeId: string | null, handleId: string | null }) => {
     connectingNodeId.current = nodeId;
@@ -60,20 +78,21 @@ export function useFlowInteraction({ nodes, edges, setNodes, setEdges, nodePalet
     if (!spec) { setIsModalOpen(false); setPendingConnect(null); return; }
     const id = nextId();
     const baseData: any = JSON.parse(JSON.stringify(spec.default_data ?? {}));
-if (!baseData.label) { baseData.label = spec.label; }
-baseData.onChange = (nodeId: string, value: string) => {
-  setNodes((nds) =>
-    nds.map((n) =>
-      n.id === nodeId ? { ...n, data: { ...n.data, value } } : n
-    )
-  );
-};
+    
+    if (!baseData.label) { baseData.label = spec.label; }
+    
+    // 🔥 CORREÇÃO: Usa a função passada do FlowController
+    baseData.onChange = onNodeValueChange;
+    
     baseData.inputsMode = normalizeIOMode(baseData.inputsMode);
     baseData.outputsMode = normalizeIOMode(baseData.outputsMode);
     if (baseData.inputsMode === 'n') baseData.inputsCount = Math.max(baseData.inputsCount ?? 1, 1);
     if (baseData.outputsMode === 'n') baseData.outputsCount = Math.max(baseData.outputsCount ?? 1, 1);
+    
     let newNodePosition = { x: 0, y: 0 };
     const newNode: Node = { id, type: spec.type, className: 'hacker-node', position: { x: 0, y: 0 }, data: baseData };
+
+    console.log('🆕 Adicionando novo node:', { id, type: spec.type, currentNodesCount: nodes.length });
 
     if (pendingConnect) {
       newNodePosition = pendingConnect.pos;
@@ -95,7 +114,7 @@ baseData.onChange = (nodeId: string, value: string) => {
       setNodes((nds) => [...nds, newNode]);
     }
     setIsModalOpen(false);
-  }, [nodePalette, pendingConnect, screenToFlowPosition, edges, setNodes, setEdges]);
+  }, [nodePalette, pendingConnect, screenToFlowPosition, edges, setNodes, setEdges, nextId, onNodeValueChange, nodes.length]);
 
   const del = useKeyPress('Delete');
   const bsp = useKeyPress('Backspace');

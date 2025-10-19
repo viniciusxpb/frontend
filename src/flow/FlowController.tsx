@@ -18,67 +18,47 @@ export default function FlowController({ onReassignNodeData }: FlowControllerPro
   const [workspaceName, setWorkspaceName] = useState('workspace-1');
   const nodePalette = useNodePalette();
   const { nodes, edges, setNodes, setEdges, onNodesChange, onEdgesChange, onConnect } = useFlowStateSync();
+  
+  // 🔥 CORREÇÃO: Função que realmente atualiza os valores dos nós
+  const handleNodeValueChange = useCallback((nodeId: string, value: string) => {
+    console.log(`📝 Atualizando node ${nodeId} para valor:`, value);
+    setNodes(nds => nds.map(node => 
+      node.id === nodeId ? { 
+        ...node, 
+        data: { 
+          ...node.data, 
+          value 
+        } 
+      } : node
+    ));
+  }, [setNodes]);
+
   const {
     isModalOpen, panelPos,
     setIsModalOpen, setPanelPos,
     onConnectStart, onConnectEnd, addNodeByType, onPaneClick, handleCloseModal
-  } = useFlowInteraction({ nodes, edges, setNodes, setEdges, nodePalette });
+  } = useFlowInteraction({ 
+    nodes, 
+    edges, 
+    setNodes, 
+    setEdges, 
+    nodePalette,
+    onNodeValueChange: handleNodeValueChange // 🔥 PASSA A FUNÇÃO PARA USE_FLOW_INTERACTION
+  });
+
   const { saveWorkspace, loadWorkspace } = useWorkspacePersistence();
 
-  // Função que atualiza os valores dos nós
-  const handleNodeValueChange = useCallback((nodeId: string, value: string) => {
-    console.log(`📝 Atualizando node ${nodeId} para valor:`, value);
-    setNodes(nds => nds.map(node => 
-      node.id === nodeId ? { ...node, data: { ...node.data, value } } : node
-    ));
-  }, [setNodes]);
-
-  // Função para processar nós carregados do workspace
-  const handleLoadWorkspace = useCallback(async (workspaceName: string) => {
-    const data = await loadWorkspace(workspaceName);
-    if (data && data.nodes && data.edges) {
-      let processedNodes = data.nodes;
-      
-      // Aplica o reassign das funções se disponível
-      if (onReassignNodeData) {
-        processedNodes = onReassignNodeData(data.nodes);
-      } else {
-        // Fallback: reassign local se a prop não foi passada
-        processedNodes = data.nodes.map(node => ({
-          ...node,
-          data: {
-            ...node.data,
-            onChange: handleNodeValueChange
-          }
-        }));
-      }
-      
-      setNodes(processedNodes);
-      setEdges(data.edges);
-      console.log('✅ Workspace carregado com nós processados:', processedNodes);
-      return true;
-    }
-    return false;
-  }, [loadWorkspace, setNodes, setEdges, onReassignNodeData, handleNodeValueChange]);
-
-  const handleSaveWorkspace = async () => {
-    const success = await saveWorkspace(workspaceName, nodes, edges);
-    if (success) {
-      alert(`✅ Workspace "${workspaceName}" salvo!`);
-    } else {
-      alert(`❌ Erro ao salvar workspace`);
-    }
-  };
-
-  // Handler para quando o LeftPanel carrega um workspace
+  // 🔥 CORREÇÃO: Função para processar nós carregados do workspace
   const handleLoadWorkspaceFromPanel = useCallback((newNodes: Node[], newEdges: Edge[]) => {
     let processedNodes = newNodes;
+    
+    console.log('🔄 Carregando workspace com', newNodes.length, 'nodes e', newEdges.length, 'edges');
     
     // Aplica o reassign das funções se disponível
     if (onReassignNodeData) {
       processedNodes = onReassignNodeData(newNodes);
     } else {
-      // Fallback: reassign local
+      // Fallback: reassign local COM A FUNÇÃO CORRETA
       processedNodes = newNodes.map(node => ({
         ...node,
         data: {
@@ -90,8 +70,19 @@ export default function FlowController({ onReassignNodeData }: FlowControllerPro
     
     setNodes(processedNodes);
     setEdges(newEdges);
-    console.log('🎯 Workspace carregado via LeftPanel:', processedNodes);
+    console.log('🎯 Workspace carregado via LeftPanel. Total nodes:', processedNodes.length);
   }, [setNodes, setEdges, onReassignNodeData, handleNodeValueChange]);
+
+  const handleSaveWorkspace = async () => {
+    const success = await saveWorkspace(workspaceName, nodes, edges);
+    if (success) {
+      alert(`✅ Workspace "${workspaceName}" salvo!`);
+    } else {
+      alert(`❌ Erro ao salvar workspace`);
+    }
+  };
+
+  console.log('🔍 FlowController - nodes count:', nodes.length, 'edges count:', edges.length);
 
   return (
     <>
