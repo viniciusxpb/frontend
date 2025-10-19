@@ -29,6 +29,13 @@ export interface UseWsClient {
   close: () => void;
 }
 
+// --- Helper de Log com Timestamp ---
+function log(level: 'log' | 'warn' | 'error', ...args: any[]) {
+  const ts = new Date().toISOString();
+  console[level](`[${ts}]`, ...args);
+}
+// -----------------------------------
+
 /**
  * Hook de WebSocket confiável com reconexão exponencial e heartbeat.
  * URL recomendada via env: import.meta.env.VITE_WS_URL
@@ -58,7 +65,7 @@ export function useWsClient(url: string, opts?: UseWsClientOptions): UseWsClient
     if (!options.heartbeatMs || hbRef.current) return;
     hbRef.current = window.setInterval(() => {
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-        options.debug && console.log('🟡 [WS Front] Enviando Heartbeat (ping)');
+        options.debug && log('log', '🟡 [WS Front] Enviando Heartbeat (ping)');
         try { wsRef.current.send('ping'); } catch { /* ignore */ }
       }
     }, options.heartbeatMs);
@@ -81,14 +88,14 @@ export function useWsClient(url: string, opts?: UseWsClientOptions): UseWsClient
       if (cancelled) return;
 
       setStatus('connecting');
-      options.debug && console.log(`🟡 [WS Front] Conectando em ${url}...`);
+      options.debug && log('log', `🟡 [WS Front] Conectando em ${url}...`);
       const ws = new WebSocket(url);
       wsRef.current = ws;
 
       ws.onopen = () => {
         retriesRef.current = 0;
         setStatus('open');
-        options.debug && console.log('🟢 [WS Front] Conexão ABERTA:', url);
+        options.debug && log('log', '🟢 [WS Front] Conexão ABERTA:', url);
         startHeartbeat();
       };
 
@@ -99,17 +106,17 @@ export function useWsClient(url: string, opts?: UseWsClientOptions): UseWsClient
           const parsed = JSON.parse(typeof ev.data === 'string' ? ev.data : '');
           setLastJson(parsed);
           // loga tudo que chegar (requisito)
-          console.log('🟢 [WS Front] Mensagem (JSON):', parsed);
+          log('log', '🟢 [WS Front] Mensagem (JSON):', parsed);
         } catch {
           setLastJson(null);
-          console.log('🟢 [WS Front] Mensagem (RAW):', ev.data);
+          log('log', '🟢 [WS Front] Mensagem (RAW):', ev.data);
         }
       };
 
       ws.onerror = (err) => {
         // Erros de WS são notórios por serem inúteis. O 'err' é só um 'Event'.
         // O erro de verdade aparece no 'onclose'.
-        options.debug && console.error('🔴 [WS Front] ERROR EVENT:', err);
+        options.debug && log('error', '🔴 [WS Front] ERROR EVENT:', err);
       };
 
       ws.onclose = (ev) => {
@@ -118,7 +125,7 @@ export function useWsClient(url: string, opts?: UseWsClientOptions): UseWsClient
         wsRef.current = null;
         
         // LOG LENDÁRIO AQUI: Isso é o que a gente quer ver
-        options.debug && console.error(
+        options.debug && log('error',
           `🔴 [WS Front] CONEXÃO FECHADA: code=${ev.code} reason=${ev.reason || "''"} wasClean=${ev.wasClean}`
         );
 
@@ -129,12 +136,12 @@ export function useWsClient(url: string, opts?: UseWsClientOptions): UseWsClient
               (options.backoffBaseMs ?? 750) * Math.pow(2, retry),
               options.backoffMaxMs ?? 10_000
             );
-            options.debug && console.warn(`🟡 [WS Front] Reconectando em ${Math.round(delay)}ms (tentativa ${retry + 1})`);
+            options.debug && log('warn', `🟡 [WS Front] Reconectando em ${Math.round(delay)}ms (tentativa ${retry + 1})`);
             setStatus('connecting');
             const t = window.setTimeout(connect, delay);
             return () => clearTimeout(t);
           } else {
-            options.debug && console.error('🔴 [WS Front] Máximo de tentativas atingido. Desistindo.');
+            options.debug && log('error', '🔴 [WS Front] Máximo de tentativas atingido. Desistindo.');
           }
         }
       };
@@ -155,14 +162,14 @@ export function useWsClient(url: string, opts?: UseWsClientOptions): UseWsClient
   const send: UseWsClient['send'] = (data) => {
     const ok = !!wsRef.current && wsRef.current.readyState === WebSocket.OPEN;
     if (!ok) {
-      options.debug && console.warn('🔴 [WS Front] send(): socket não estava aberto');
+      options.debug && log('warn', '🔴 [WS Front] send(): socket não estava aberto');
       return false;
     }
     try {
       wsRef.current!.send(data);
       return true;
     } catch (e) {
-      options.debug && console.error('🔴 [WS Front] send() falhou:', e);
+      options.debug && log('error', '🔴 [WS Front] send() falhou:', e);
       return false;
     }
   };
