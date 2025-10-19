@@ -18,11 +18,10 @@ import LeftPanel from '@/components/LeftPanel';
 import HackerModal from '@/components/HackerModal';
 import NodeCatalog from '@/components/NodeCatalog';
 import usePaneClickCombo from '@/hooks/usePaneClickCombo';
-import { nodeTypes, type NodePaletteItem } from '@/nodes/registry'; // Importa tipos e componentes
+import { nodeTypes, type NodePaletteItem } from '@/nodes/registry';
 import { useWsClient } from '@/hooks/useWsClient';
 import { buildWsUrl } from '@/utils/wsUrl';
 
-// Helpers para entradas dinâmicas (sem alterações)
 type IOmode = 0 | 1 | 'n';
 function isDynInputsNode(n: Node) {
   const m: IOmode | undefined = (n.data as any)?.inputsMode;
@@ -48,7 +47,7 @@ function normalizeAll(nodes: Node[], edges: Edge[]): Node[] {
   return nodes.map((n) => normalizeDynCounts(n, edges));
 }
 
-const initialNodes: Node[] = []; // Começa sem nodes
+const initialNodes: Node[] = [];
 const initialEdges: Edge[] = [];
 
 type PendingConnect = {
@@ -63,7 +62,7 @@ export default function FlowInner() {
   const [panelPos, setPanelPos] = useState<{ x: number; y: number } | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [pendingConnect, setPendingConnect] = useState<PendingConnect | null>(null);
-  const [nodePalette, setNodePalette] = useState<NodePaletteItem[]>([]); // Estado para a palette dinâmica
+  const [nodePalette, setNodePalette] = useState<NodePaletteItem[]>([]);
   const { screenToFlowPosition } = useReactFlow();
   const updateNodeInternals = useUpdateNodeInternals();
   const [selectedNodes, setSelectedNodes] = useState<string[]>([]);
@@ -76,21 +75,16 @@ export default function FlowInner() {
     debug: true,
   });
 
-  // Efeito para processar mensagens do WebSocket e atualizar a nodePalette
   useEffect(() => {
     if (client.lastJson) {
       const message = client.lastJson as any;
       if (message?.type === 'NODE_CONFIG' && Array.isArray(message.payload)) {
         console.log('Recebido NODE_CONFIG do backend:', message.payload);
         const validPaletteItems = message.payload.filter(
-          (item: any): item is NodePaletteItem => // Type guard para segurança
-            typeof item.type === 'string' &&
-            typeof item.label === 'string' &&
-            // Verifica se o tipo existe no nosso mapeamento nodeTypes
-            Object.prototype.hasOwnProperty.call(nodeTypes, item.type)
+          (item: any): item is NodePaletteItem =>
+            typeof item.type === 'string' && typeof item.label === 'string'
         );
-         // Ordena alfabeticamente pelo label antes de setar o estado
-        validPaletteItems.sort((a, b) => a.label.localeCompare(b.label));
+         validPaletteItems.sort((a, b) => a.label.localeCompare(b.label));
         setNodePalette(validPaletteItems);
       }
     }
@@ -103,10 +97,9 @@ export default function FlowInner() {
     },
   });
 
-  const idRef = useRef(1); // Começa em 1 para os IDs
+  const idRef = useRef(1);
   const nextId = () => `n${idRef.current++}`;
 
-  // Hook useEffect para updateNodeInternals (sem alterações)
   const prevCountsRef = useRef<Record<string, number>>({});
   useEffect(() => {
     const toUpdate: string[] = [];
@@ -146,9 +139,8 @@ export default function FlowInner() {
     });
   }, []);
 
-   const onConnectEnd = useCallback(
+  const onConnectEnd = useCallback(
     (event: MouseEvent | TouchEvent) => {
-        // Tenta pegar a instância do React Flow (pode não estar sempre disponível globalmente)
         const reactFlowInstance = (event.target as Element)?.closest('.react-flow')?.['_reactFlowInstance'];
         if (!reactFlowInstance?.connectionHandle) return;
 
@@ -158,7 +150,6 @@ export default function FlowInner() {
         if (targetIsPane && connectingNodeId && connectingHandleType === 'source') {
             const isTouch = 'changedTouches' in event && event.changedTouches && event.changedTouches.length > 0;
             const point = isTouch ? event.changedTouches[0] : (event as MouseEvent);
-            // screenToFlowPosition precisa ser chamado aqui dentro pois depende do estado atual do hook
             const pos = screenToFlowPosition({ x: point.clientX, y: point.clientY });
 
             setPendingConnect({
@@ -169,27 +160,28 @@ export default function FlowInner() {
             setIsModalOpen(true);
         }
     },
-    [screenToFlowPosition] // screenToFlowPosition é a dependência chave aqui
-);
+    [screenToFlowPosition]
+  );
 
-  // Adiciona node usando a palette dinâmica
   const addNodeByType = useCallback((typeKey: string) => {
     const spec = nodePalette.find((n) => n.type === typeKey);
+    if (!Object.prototype.hasOwnProperty.call(nodeTypes, typeKey)) {
+        console.error(`Erro Crítico: O tipo de node '${typeKey}' existe na palette vinda do backend, mas não há um componente React mapeado para ele em src/nodes/registry.ts`);
+        alert(`Erro: Componente React para '${typeKey}' não encontrado. Verifique o console.`);
+        setIsModalOpen(false);
+        setPendingConnect(null);
+        return;
+    }
     if (!spec) {
-      console.error(`Tipo de node desconhecido ou não registrado no frontend: ${typeKey}`);
-      // Verifica se o tipo existe em nodeTypes mas não veio na palette (erro de config backend?)
-      if (Object.prototype.hasOwnProperty.call(nodeTypes, typeKey)) {
-         console.warn(`O tipo '${typeKey}' existe nos componentes React, mas não foi recebido na NODE_CONFIG do backend.`);
-      }
-      setIsModalOpen(false); // Fecha o modal mesmo se der erro
-      setPendingConnect(null);
-      return;
+       console.error(`Erro Estranho: O tipo de node '${typeKey}' existe nos componentes React, mas não foi encontrado na palette dinâmica recebida via WebSocket.`);
+       setIsModalOpen(false);
+       setPendingConnect(null);
+       return;
     }
 
     const id = nextId();
-    const baseData: any = JSON.parse(JSON.stringify(spec.defaultData ?? {})); // Deep clone
+    const baseData: any = JSON.parse(JSON.stringify(spec.defaultData ?? {}));
 
-    // Garante que o label está presente
     if (!baseData.label) {
       baseData.label = spec.label;
     }
@@ -212,10 +204,9 @@ export default function FlowInner() {
             source: fromNodeId,
             target: id,
             ...(fromHandleId ? { sourceHandle: String(fromHandleId) } : {}),
-            // targetHandle: 'in_0' // Assumimos in_0 por padrão para simplificar
           };
           const nextEdges = eds.concat(newEdge);
-          setNodes(nds => normalizeAll(nds, nextEdges)); // Normaliza DEPOIS de adicionar a edge
+          setNodes(nds => normalizeAll(nds, nextEdges));
           return nextEdges;
         });
       }
@@ -229,9 +220,8 @@ export default function FlowInner() {
       ));
     }
     setIsModalOpen(false);
-  }, [nodePalette, pendingConnect, screenToFlowPosition, edges]); // Depende da palette dinâmica
+  }, [nodePalette, pendingConnect, screenToFlowPosition, edges]);
 
-  // Delete/Backspace (sem alterações)
   const del = useKeyPress('Delete');
   const bsp = useKeyPress('Backspace');
   useEffect(() => {
@@ -251,7 +241,6 @@ export default function FlowInner() {
     setSelectedEdges([]);
    }, [del, bsp, selectedNodes, selectedEdges]);
 
-  // Pane (sem alterações)
   const PANEL_OFFSET_X = 280, PANEL_OFFSET_Y = 100;
   const onPaneClick = usePaneClickCombo({
     onSingle: () => setPanelPos(null),
@@ -260,7 +249,6 @@ export default function FlowInner() {
     },
   });
 
-  // Fechar Modal (sem alterações)
   const handleCloseModal = useCallback(() => {
     setPendingConnect(null);
     setIsModalOpen(false);
@@ -275,14 +263,13 @@ export default function FlowInner() {
             colorMode="dark"
             nodes={nodes}
             edges={edges}
-            nodeTypes={nodeTypes} // Usa o mapeamento de componentes React
+            nodeTypes={nodeTypes}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
             onConnectEnd={onConnectEnd}
             onPaneClick={onPaneClick}
             fitView
-            // Garante que a instância seja acessível globalmente (solução temporária para onConnectEnd)
             onInit={(instance) => ((window as any).reactFlowInstance = instance)}
           >
             {panelPos && (
@@ -297,7 +284,6 @@ export default function FlowInner() {
         </div>
       </div>
       <HackerModal open={isModalOpen} onClose={handleCloseModal}>
-        {/* Passa a palette dinâmica para o NodeCatalog */}
         <NodeCatalog onPick={addNodeByType} nodePalette={nodePalette} />
       </HackerModal>
     </>
