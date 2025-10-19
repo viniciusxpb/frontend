@@ -26,7 +26,7 @@ export function buildWsUrl(): string {
 
   // Overrides por env
   let host = ((import.meta as any)?.env?.VITE_WS_HOST as string) || loc.hostname || "localhost";
-  let port = ((import.meta as any)?.env?.VITE_WS_PORT as string) || "3001";
+  let port = ((import.meta as any)?.env?.VITE_WS_PORT as string) || "3100";
   let path = ((import.meta as any)?.env?.VITE_WS_PATH as string) || "/ws";
 
   if (host === "0.0.0.0") host = "localhost";

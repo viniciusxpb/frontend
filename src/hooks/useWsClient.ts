@@ -1,7 +1,7 @@
 // src/hooks/useWsClient.ts
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from 'react';
 
-export type WsStatus = "idle" | "connecting" | "open" | "closing" | "closed";
+export type WsStatus = 'idle' | 'connecting' | 'open' | 'closing' | 'closed';
 
 export interface UseWsClientOptions {
   /** Envia "ping" a cada N ms para manter a conexão viva (0 = desabilita). */
@@ -49,7 +49,7 @@ export function useWsClient(url: string, opts?: UseWsClientOptions): UseWsClient
   const retriesRef = useRef(0);
   const manualCloseRef = useRef(false);
 
-  const [status, setStatus] = useState<WsStatus>("idle");
+  const [status, setStatus] = useState<WsStatus>('idle');
   const [lastMessage, setLastMessage] = useState<MessageEvent<any> | null>(null);
   const [lastJson, setLastJson] = useState<unknown | null>(null);
 
@@ -58,7 +58,8 @@ export function useWsClient(url: string, opts?: UseWsClientOptions): UseWsClient
     if (!options.heartbeatMs || hbRef.current) return;
     hbRef.current = window.setInterval(() => {
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-        try { wsRef.current.send("ping"); } catch { /* ignore */ }
+        options.debug && console.log('🟡 [WS Front] Enviando Heartbeat (ping)');
+        try { wsRef.current.send('ping'); } catch { /* ignore */ }
       }
     }, options.heartbeatMs);
   };
@@ -79,14 +80,15 @@ export function useWsClient(url: string, opts?: UseWsClientOptions): UseWsClient
     const connect = () => {
       if (cancelled) return;
 
-      setStatus("connecting");
+      setStatus('connecting');
+      options.debug && console.log(`🟡 [WS Front] Conectando em ${url}...`);
       const ws = new WebSocket(url);
       wsRef.current = ws;
 
       ws.onopen = () => {
         retriesRef.current = 0;
-        setStatus("open");
-        options.debug && console.info("[WS] open:", url);
+        setStatus('open');
+        options.debug && console.log('🟢 [WS Front] Conexão ABERTA:', url);
         startHeartbeat();
       };
 
@@ -94,25 +96,31 @@ export function useWsClient(url: string, opts?: UseWsClientOptions): UseWsClient
         setLastMessage(ev);
         // tenta parsear JSON, se falhar deixa como null
         try {
-          const parsed = JSON.parse(typeof ev.data === "string" ? ev.data : "");
+          const parsed = JSON.parse(typeof ev.data === 'string' ? ev.data : '');
           setLastJson(parsed);
           // loga tudo que chegar (requisito)
-          console.log("[WS message JSON]", parsed);
+          console.log('🟢 [WS Front] Mensagem (JSON):', parsed);
         } catch {
           setLastJson(null);
-          console.log("[WS message RAW]", ev.data);
+          console.log('🟢 [WS Front] Mensagem (RAW):', ev.data);
         }
       };
 
       ws.onerror = (err) => {
-        options.debug && console.warn("[WS] error:", err);
+        // Erros de WS são notórios por serem inúteis. O 'err' é só um 'Event'.
+        // O erro de verdade aparece no 'onclose'.
+        options.debug && console.error('🔴 [WS Front] ERROR EVENT:', err);
       };
 
       ws.onclose = (ev) => {
-        setStatus("closed");
+        setStatus('closed');
         stopHeartbeat();
         wsRef.current = null;
-        options.debug && console.info(`[WS] closed: code=${ev.code} reason=${ev.reason || "-"} wasClean=${ev.wasClean}`);
+        
+        // LOG LENDÁRIO AQUI: Isso é o que a gente quer ver
+        options.debug && console.error(
+          `🔴 [WS Front] CONEXÃO FECHADA: code=${ev.code} reason=${ev.reason || "''"} wasClean=${ev.wasClean}`
+        );
 
         if (!cancelled && options.autoreconnect && !manualCloseRef.current) {
           const retry = retriesRef.current++;
@@ -121,12 +129,12 @@ export function useWsClient(url: string, opts?: UseWsClientOptions): UseWsClient
               (options.backoffBaseMs ?? 750) * Math.pow(2, retry),
               options.backoffMaxMs ?? 10_000
             );
-            options.debug && console.info(`[WS] reconnect in ${Math.round(delay)}ms (attempt ${retry + 1})`);
-            setStatus("connecting");
+            options.debug && console.warn(`🟡 [WS Front] Reconectando em ${Math.round(delay)}ms (tentativa ${retry + 1})`);
+            setStatus('connecting');
             const t = window.setTimeout(connect, delay);
             return () => clearTimeout(t);
           } else {
-            options.debug && console.error("[WS] max retries reached, giving up.");
+            options.debug && console.error('🔴 [WS Front] Máximo de tentativas atingido. Desistindo.');
           }
         }
       };
@@ -144,17 +152,17 @@ export function useWsClient(url: string, opts?: UseWsClientOptions): UseWsClient
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url, options.autoreconnect, options.backoffBaseMs, options.backoffMaxMs, options.maxRetries, options.heartbeatMs, options.debug]);
 
-  const send: UseWsClient["send"] = (data) => {
+  const send: UseWsClient['send'] = (data) => {
     const ok = !!wsRef.current && wsRef.current.readyState === WebSocket.OPEN;
     if (!ok) {
-      options.debug && console.warn("[WS] send(): socket not open");
+      options.debug && console.warn('🔴 [WS Front] send(): socket não estava aberto');
       return false;
     }
     try {
       wsRef.current!.send(data);
       return true;
     } catch (e) {
-      options.debug && console.error("[WS] send() failed:", e);
+      options.debug && console.error('🔴 [WS Front] send() falhou:', e);
       return false;
     }
   };
@@ -164,7 +172,7 @@ export function useWsClient(url: string, opts?: UseWsClientOptions): UseWsClient
     stopHeartbeat();
     try {
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-        setStatus("closing");
+        setStatus('closing');
       }
       wsRef.current?.close();
     } catch { /* ignore */ }
