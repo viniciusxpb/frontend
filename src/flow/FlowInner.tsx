@@ -1,5 +1,5 @@
 // src/flow/FlowInner.tsx
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react'; // Adiciona useMemo
 import {
   ReactFlow,
   applyNodeChanges,
@@ -10,6 +10,7 @@ import {
   useReactFlow,
   useKeyPress,
   useUpdateNodeInternals,
+  type NodeTypes, // Importa o tipo NodeTypes
   type EdgeChange, type Connection, type Node, type Edge
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
@@ -18,19 +19,30 @@ import LeftPanel from '@/components/LeftPanel';
 import HackerModal from '@/components/HackerModal';
 import NodeCatalog from '@/components/NodeCatalog';
 import usePaneClickCombo from '@/hooks/usePaneClickCombo';
-import { nodeTypes, type NodePaletteItem } from '@/nodes/registry';
+// Importa APENAS BaseIONode e a interface
+import { BaseIONode } from '@/nodes/BaseIONode';
+import { type NodePaletteItem } from '@/nodes/registry';
 import { useWsClient } from '@/hooks/useWsClient';
 import { buildWsUrl } from '@/utils/wsUrl';
 
-type IOmode = 0 | 1 | 'n';
+// Helpers para entradas dinâmicas (sem alterações)
+type IOmode = 0 | 1 | 'n' | string; // Permite string vinda do backend
 function isDynInputsNode(n: Node) {
   const m: IOmode | undefined = (n.data as any)?.inputsMode;
   return m === 'n';
 }
+function normalizeIOMode(mode: string | undefined): IOmode {
+    if (mode === '0') return 0;
+    if (mode === '1') return 1;
+    if (mode === 'n') return 'n';
+    return 1; // Default para 1 se for inválido ou ausente
+}
 function normalizeDynCounts(node: Node, edges: Edge[]): Node {
-  if (!node || !isDynInputsNode(node)) return node;
   const data: any = node.data ?? {};
-  const currentCount: number = Number.isFinite(data.inputsCount) ? data.inputsCount : 1;
+  const inputsMode = normalizeIOMode(data.inputsMode); // Normaliza o modo lido
+  if (inputsMode !== 'n') return node; // Só normaliza contagem se modo for 'n'
+
+  const currentCount: number = Number.isFinite(data.inputsCount) ? Math.max(data.inputsCount, 1) : 1;
   const used = new Set(
     edges
       .filter((e) => e.target === node.id && e.targetHandle && String(e.targetHandle).startsWith('in_'))
@@ -39,13 +51,18 @@ function normalizeDynCounts(node: Node, edges: Edge[]): Node {
   const usedCount = used.size;
   const shouldCount = Math.max(usedCount + 1, 1);
   if (shouldCount !== currentCount) {
+    // Retorna um novo objeto node com data atualizado
     return { ...node, data: { ...data, inputsMode: 'n', inputsCount: shouldCount } };
   }
-  return node;
+  return node; // Retorna o node original se a contagem não mudou
 }
+
+// Modifica normalizeAll para usar a versão corrigida de normalizeDynCounts
 function normalizeAll(nodes: Node[], edges: Edge[]): Node[] {
-  return nodes.map((n) => normalizeDynCounts(n, edges));
+    // Mapeia cada nó para sua versão normalizada, garantindo que sempre retornamos um array de nós
+    return nodes.map(n => normalizeDynCounts(n, edges));
 }
+
 
 const initialNodes: Node[] = [];
 const initialEdges: Edge[] = [];
@@ -90,6 +107,18 @@ export default function FlowInner() {
     }
   }, [client.lastJson]);
 
+  // --- MAPEAMENTO DINÂMICO DE NODETYPES ---
+  // Cria o objeto nodeTypes dinamicamente baseado na palette recebida
+  const dynamicNodeTypes: NodeTypes = useMemo(() => {
+    const types: NodeTypes = {};
+    nodePalette.forEach(item => {
+      // Todos os tipos recebidos do backend serão renderizados pelo BaseIONode
+      types[item.type] = BaseIONode;
+    });
+    return types;
+  }, [nodePalette]); // Recalcula apenas quando a nodePalette mudar
+  // --- FIM DO MAPEAMENTO DINÂMICO ---
+
   useOnSelectionChange({
     onChange: ({ nodes, edges }) => {
       setSelectedNodes(nodes.map((n: any) => n.id));
@@ -103,20 +132,24 @@ export default function FlowInner() {
   const prevCountsRef = useRef<Record<string, number>>({});
   useEffect(() => {
     const toUpdate: string[] = [];
-    for (const n of nodes) {
-      if (isDynInputsNode(n)) {
-        const count = (n.data as any)?.inputsCount ?? 1;
-        const prev = prevCountsRef.current[n.id];
-        if (prev === undefined || prev !== count) {
-          toUpdate.push(n.id);
-          prevCountsRef.current[n.id] = count;
+    nodes.forEach(n => { // Usamos forEach aqui
+        const data: any = n.data ?? {};
+        const inputsMode = normalizeIOMode(data.inputsMode);
+        if (inputsMode === 'n') {
+            const count = data.inputsCount ?? 1;
+            const prev = prevCountsRef.current[n.id];
+            if (prev === undefined || prev !== count) {
+                toUpdate.push(n.id);
+                prevCountsRef.current[n.id] = count;
+            }
         }
-      }
-    }
-    if (toUpdate.length) {
-      toUpdate.forEach((id) => updateNodeInternals(id));
+    });
+    if (toUpdate.length > 0) {
+        // updateNodeInternals pode receber um array de IDs
+        updateNodeInternals(toUpdate);
     }
   }, [nodes, updateNodeInternals]);
+
 
   const onNodesChange = useCallback(
     (changes) => setNodes((snap) => applyNodeChanges(changes, snap)),
@@ -124,25 +157,35 @@ export default function FlowInner() {
   );
 
   const onEdgesChange = useCallback((changes: EdgeChange[]) => {
-    setEdges((prev) => {
-      const next = applyEdgeChanges(changes, prev);
-      setNodes((nds) => normalizeAll(nds, next));
-      return next;
+    setEdges((prevEdges) => {
+        const nextEdges = applyEdgeChanges(changes, prevEdges);
+        // Atualiza os nós baseado nas edges *antes* de atualizar o estado das edges
+        setNodes(nds => normalizeAll(nds, nextEdges));
+        return nextEdges; // Retorna as edges atualizadas
     });
-  }, []);
+  }, []); // Removido setNodes das dependências
+
 
   const onConnect = useCallback((p: Connection) => {
-    setEdges((prev) => {
-      const next = addEdge(p, prev);
-      setNodes((nds) => normalizeAll(nds, next));
-      return next;
+    setEdges((prevEdges) => {
+        // Cria a nova edge com addEdge
+        const newEdge = { ...p, id: `e-${p.source}-${p.target}-${Date.now()}` };
+        const nextEdges = prevEdges.concat(newEdge); // Adiciona a nova edge
+        // Atualiza os nós baseado nas edges atualizadas
+        setNodes(nds => normalizeAll(nds, nextEdges));
+        return nextEdges; // Retorna o novo array de edges
     });
-  }, []);
+  }, []); // Removido setNodes das dependências
+
 
   const onConnectEnd = useCallback(
     (event: MouseEvent | TouchEvent) => {
-        const reactFlowInstance = (event.target as Element)?.closest('.react-flow')?.['_reactFlowInstance'];
+        const reactFlowWrapper = (event.target as Element)?.closest('.react-flow');
+        if (!reactFlowWrapper) return;
+        // Acessa a instância via atributo (alternativa se global não funcionar)
+        const reactFlowInstance = (reactFlowWrapper as any)._reactFlowInstance;
         if (!reactFlowInstance?.connectionHandle) return;
+
 
         const { connectingHandleId, connectingNodeId, connectingHandleType } = reactFlowInstance.connectionHandle;
         const targetIsPane = (event.target as Element).classList.contains('react-flow__pane');
@@ -165,37 +208,48 @@ export default function FlowInner() {
 
   const addNodeByType = useCallback((typeKey: string) => {
     const spec = nodePalette.find((n) => n.type === typeKey);
-    if (!Object.prototype.hasOwnProperty.call(nodeTypes, typeKey)) {
-        console.error(`Erro Crítico: O tipo de node '${typeKey}' existe na palette vinda do backend, mas não há um componente React mapeado para ele em src/nodes/registry.ts`);
-        alert(`Erro: Componente React para '${typeKey}' não encontrado. Verifique o console.`);
-        setIsModalOpen(false);
-        setPendingConnect(null);
-        return;
-    }
+
+    // A única verificação agora é se a especificação existe na palette
     if (!spec) {
-       console.error(`Erro Estranho: O tipo de node '${typeKey}' existe nos componentes React, mas não foi encontrado na palette dinâmica recebida via WebSocket.`);
+       console.error(`Erro: Tentativa de adicionar node tipo '${typeKey}' que não foi encontrado na palette recebida.`);
        setIsModalOpen(false);
        setPendingConnect(null);
        return;
     }
 
     const id = nextId();
+    // Faz um deep clone dos dados default para evitar mutações acidentais
     const baseData: any = JSON.parse(JSON.stringify(spec.defaultData ?? {}));
 
+    // Garante que o label está presente, usando o da palette como fallback
     if (!baseData.label) {
       baseData.label = spec.label;
     }
 
+     // Normaliza os modos I/O lidos do backend logo na criação do node
+    baseData.inputsMode = normalizeIOMode(baseData.inputsMode);
+    baseData.outputsMode = normalizeIOMode(baseData.outputsMode);
+    // Garante contagem inicial mínima de 1 para modo 'n'
+    if (baseData.inputsMode === 'n') baseData.inputsCount = Math.max(baseData.inputsCount ?? 1, 1);
+    if (baseData.outputsMode === 'n') baseData.outputsCount = Math.max(baseData.outputsCount ?? 1, 1);
+
+
     let newNodePosition = { x: 0, y: 0 };
+    const newNode: Node = {
+        id,
+        type: spec.type, // O tipo é a string vinda do backend
+        className: 'hacker-node', // Mantemos a classe CSS
+        position: { x: 0, y: 0 }, // Será definido abaixo
+        data: baseData,
+    };
+
 
     if (pendingConnect) {
       newNodePosition = pendingConnect.pos;
+      newNode.position = newNodePosition; // Define a posição do novo nó
       const { fromNodeId, fromHandleId } = pendingConnect;
 
-      setNodes((nds) => normalizeAll(
-        [...nds, { id, type: spec.type, className: 'hacker-node', position: newNodePosition, data: baseData } as Node],
-        edges
-      ));
+      setNodes((nds) => normalizeAll([...nds, newNode], edges)); // Adiciona e normaliza
 
       if (fromNodeId) {
         setEdges((eds) => {
@@ -206,6 +260,7 @@ export default function FlowInner() {
             ...(fromHandleId ? { sourceHandle: String(fromHandleId) } : {}),
           };
           const nextEdges = eds.concat(newEdge);
+           // RE-NORMALIZA os nós com a nova edge adicionada
           setNodes(nds => normalizeAll(nds, nextEdges));
           return nextEdges;
         });
@@ -214,13 +269,11 @@ export default function FlowInner() {
     } else {
       const center = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
       newNodePosition = screenToFlowPosition(center);
-      setNodes((nds) => normalizeAll(
-        [...nds, { id, type: spec.type, className: 'hacker-node', position: newNodePosition, data: baseData } as Node],
-        edges
-      ));
+      newNode.position = newNodePosition; // Define a posição do novo nó
+      setNodes((nds) => normalizeAll([...nds, newNode], edges)); // Adiciona e normaliza
     }
     setIsModalOpen(false);
-  }, [nodePalette, pendingConnect, screenToFlowPosition, edges]);
+  }, [nodePalette, pendingConnect, screenToFlowPosition, edges]); // Removido setNodes/setEdges
 
   const del = useKeyPress('Delete');
   const bsp = useKeyPress('Backspace');
@@ -233,13 +286,15 @@ export default function FlowInner() {
             !selectedNodes.includes(e.source) &&
             !selectedNodes.includes(e.target)
         );
+        // Atualiza os nós ANTES de remover as edges no estado
         setNodes(nds => normalizeAll(nds, next));
         return next;
     });
     setNodes((nds) => nds.filter((n) => !selectedNodes.includes(n.id)));
     setSelectedNodes([]);
     setSelectedEdges([]);
-   }, [del, bsp, selectedNodes, selectedEdges]);
+   }, [del, bsp, selectedNodes, selectedEdges]); // Removido setNodes/setEdges
+
 
   const PANEL_OFFSET_X = 280, PANEL_OFFSET_Y = 100;
   const onPaneClick = usePaneClickCombo({
@@ -263,7 +318,7 @@ export default function FlowInner() {
             colorMode="dark"
             nodes={nodes}
             edges={edges}
-            nodeTypes={nodeTypes}
+            nodeTypes={dynamicNodeTypes} // Usa o mapeamento dinâmico
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
