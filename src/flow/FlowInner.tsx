@@ -29,32 +29,60 @@ function isDynInputsNode(n: Node) {
   const m: IOmode | undefined = (n.data as any)?.inputsMode;
   return m === 'n';
 }
+function isDynOutputsNode(n: Node) {
+  const m: IOmode | undefined = (n.data as any)?.outputsMode;
+  return m === 'n';
+}
 function normalizeIOMode(mode: string | undefined): IOmode {
     if (mode === '0') return 0;
     if (mode === '1') return 1;
     if (mode === 'n') return 'n';
     return 1;
 }
-function normalizeDynCounts(node: Node, edges: Edge[]): Node {
-  const data: any = node.data ?? {};
-  const inputsMode = normalizeIOMode(data.inputsMode);
-  if (inputsMode !== 'n') return node;
+function normalizeNodeIOCounts(node: Node, edges: Edge[]): Node {
+  let updatedNode = node;
+  const data: any = updatedNode.data ?? {};
 
-  const currentCount: number = Number.isFinite(data.inputsCount) ? Math.max(data.inputsCount, 1) : 1;
-  const used = new Set(
-    edges
-      .filter((e) => e.target === node.id && e.targetHandle && String(e.targetHandle).startsWith('in_'))
-      .map((e) => String(e.targetHandle))
-  );
-  const usedCount = used.size;
-  const shouldCount = Math.max(usedCount + 1, 1);
-  if (shouldCount !== currentCount) {
-    return { ...node, data: { ...data, inputsMode: 'n', inputsCount: shouldCount } };
+  const inputsMode = normalizeIOMode(data.inputsMode);
+  if (inputsMode === 'n') {
+    const currentInCount: number = Number.isFinite(data.inputsCount) ? Math.max(data.inputsCount, 1) : 1;
+    const usedInHandles = new Set(
+      edges
+        .filter((e) => e.target === updatedNode.id && e.targetHandle && String(e.targetHandle).startsWith('in_'))
+        .map((e) => String(e.targetHandle))
+    );
+    const shouldInCount = Math.max(usedInHandles.size + 1, 1);
+    if (shouldInCount !== currentInCount) {
+      updatedNode = {
+          ...updatedNode,
+          data: { ...data, inputsMode: 'n', inputsCount: shouldInCount }
+      };
+    }
   }
-  return node;
+
+  const outputsMode = normalizeIOMode(data.outputsMode);
+  if (outputsMode === 'n') {
+    const currentData = updatedNode.data ?? {};
+    const currentOutCount: number = Number.isFinite(currentData.outputsCount) ? Math.max(currentData.outputsCount, 1) : 1;
+    const usedOutHandles = new Set(
+      edges
+        .filter((e) => e.source === updatedNode.id && e.sourceHandle && String(e.sourceHandle).startsWith('out_'))
+        .map((e) => String(e.sourceHandle))
+    );
+    const shouldOutCount = Math.max(usedOutHandles.size + 1, 1);
+    if (shouldOutCount !== currentOutCount) {
+      updatedNode = {
+          ...updatedNode,
+          data: { ...(updatedNode.data ?? {}), outputsMode: 'n', outputsCount: shouldOutCount }
+      };
+    }
+  }
+
+  return updatedNode;
 }
-function normalizeAll(nodes: Node[], edges: Edge[]): Node[] {
-    return nodes.map(n => normalizeDynCounts(n, edges));
+
+function normalizeAllNodesIO(nodes: Node[], edges: Edge[]): Node[] {
+    return nodes.map(n => normalizeNodeIOCounts(n, edges));
 }
 
 const initialNodes: Node[] = [];
@@ -62,7 +90,7 @@ const initialEdges: Edge[] = [];
 
 type PendingConnect = {
   fromNodeId: string | null;
-  fromHandleId: string | null; // Tornamos não opcional para garantir que sempre temos
+  fromHandleId: string | null;
   pos: { x: number; y: number };
 };
 
@@ -77,8 +105,8 @@ export default function FlowInner() {
   const updateNodeInternals = useUpdateNodeInternals();
   const [selectedNodes, setSelectedNodes] = useState<string[]>([]);
   const [selectedEdges, setSelectedEdges] = useState<string[]>([]);
-  const connectingNodeId = useRef<string | null>(null); // Ref para guardar o nó de origem da conexão
-  const connectingHandleId = useRef<string | null>(null); // Ref para guardar o handle de origem
+  const connectingNodeId = useRef<string | null>(null);
+  const connectingHandleId = useRef<string | null>(null);
 
   const WS_URL = buildWsUrl();
   const client = useWsClient(WS_URL, {
@@ -107,7 +135,6 @@ export default function FlowInner() {
     nodePalette.forEach(item => {
       types[item.type] = BaseIONode;
     });
-    // Adiciona um tipo 'default' caso algum nó não mapeado apareça (segurança)
     types['default'] = BaseIONode;
     return types;
   }, [nodePalette]);
@@ -122,19 +149,34 @@ export default function FlowInner() {
   const idRef = useRef(1);
   const nextId = () => `n${idRef.current++}`;
 
-  const prevCountsRef = useRef<Record<string, number>>({});
+  const prevIOCountsRef = useRef<Record<string, { inputs?: number; outputs?: number }>>({});
   useEffect(() => {
     const toUpdate: string[] = [];
     nodes.forEach(n => {
         const data: any = n.data ?? {};
         const inputsMode = normalizeIOMode(data.inputsMode);
+        const outputsMode = normalizeIOMode(data.outputsMode);
+        let changed = false;
+
+        const prevCounts = prevIOCountsRef.current[n.id] ?? {};
+
         if (inputsMode === 'n') {
             const count = data.inputsCount ?? 1;
-            const prev = prevCountsRef.current[n.id];
-            if (prev === undefined || prev !== count) {
-                toUpdate.push(n.id);
-                prevCountsRef.current[n.id] = count;
+            if (prevCounts.inputs === undefined || prevCounts.inputs !== count) {
+                prevIOCountsRef.current[n.id] = { ...prevCounts, inputs: count };
+                changed = true;
             }
+        }
+         if (outputsMode === 'n') {
+            const count = data.outputsCount ?? 1;
+             if (prevCounts.outputs === undefined || prevCounts.outputs !== count) {
+                prevIOCountsRef.current[n.id] = { ...prevCounts, outputs: count };
+                changed = true;
+            }
+        }
+
+        if (changed && !toUpdate.includes(n.id)) {
+            toUpdate.push(n.id);
         }
     });
     if (toUpdate.length > 0) {
@@ -152,32 +194,26 @@ export default function FlowInner() {
     [setEdges]
   );
 
-  const onConnect = useCallback(
-    (connection: Connection) => {
-      // Limpa as refs de conexão pendente se a conexão foi bem-sucedida
+  // CORREÇÃO: Removi o comentário placeholder inválido
+  const onConnect = useCallback((connection: Connection) => {
       connectingNodeId.current = null;
       connectingHandleId.current = null;
       setEdges((eds) => addEdge(connection, eds));
-    },
-    [setEdges]
-  );
+    }, [setEdges]); // Mantém a dependência correta
 
   useEffect(() => {
-    setNodes((nds) => normalizeAll(nds, edges));
+    setNodes((nds) => normalizeAllNodesIO(nds, edges));
   }, [edges, setNodes]);
 
-  // Guarda o nó/handle de origem quando a conexão *começa*
   const onConnectStart = useCallback((_: any, { nodeId, handleId }: { nodeId: string | null, handleId: string | null }) => {
     connectingNodeId.current = nodeId;
     connectingHandleId.current = handleId;
   }, []);
 
-  // Verifica se a conexão terminou no painel e abre o modal
   const onConnectEnd = useCallback(
     (event: MouseEvent | TouchEvent) => {
       const targetIsPane = (event.target as Element).classList.contains('react-flow__pane');
 
-      // Verifica se temos um nó/handle de origem e se soltou no painel
       if (targetIsPane && connectingNodeId.current && connectingHandleId.current) {
         const isTouch = 'changedTouches' in event && event.changedTouches && event.changedTouches.length > 0;
         const point = isTouch ? event.changedTouches[0] : (event as MouseEvent);
@@ -185,12 +221,11 @@ export default function FlowInner() {
 
         setPendingConnect({
           fromNodeId: connectingNodeId.current,
-          fromHandleId: connectingHandleId.current, // Guarda o handle de origem
+          fromHandleId: connectingHandleId.current,
           pos,
         });
         setIsModalOpen(true);
       }
-      // Limpa as refs após a tentativa de conexão, sucedida ou não
       connectingNodeId.current = null;
       connectingHandleId.current = null;
     },
@@ -221,11 +256,8 @@ export default function FlowInner() {
 
     let newNodePosition = { x: 0, y: 0 };
     const newNode: Node = {
-        id,
-        type: spec.type,
-        className: 'hacker-node',
-        position: { x: 0, y: 0 },
-        data: baseData,
+        id, type: spec.type, className: 'hacker-node',
+        position: { x: 0, y: 0 }, data: baseData,
     };
 
     if (pendingConnect) {
@@ -233,37 +265,27 @@ export default function FlowInner() {
       newNode.position = newNodePosition;
       const { fromNodeId, fromHandleId } = pendingConnect;
 
-      // Adiciona o novo nó primeiro
-      setNodes((nds) => [...nds, newNode]); // Não precisa normalizar aqui ainda
+      setNodes((nds) => [...nds, newNode]);
 
-      // Se veio de uma conexão pendente válida, cria a edge
       if (fromNodeId && fromHandleId) {
-        // Assume que a primeira entrada ('in_0') é o alvo padrão
         const targetHandleId = 'in_0';
         setEdges((eds) => {
           const newEdge: Edge = {
-            id: `e-${fromNodeId}-${id}-${Date.now()}`,
-            source: fromNodeId,
-            target: id,
-            sourceHandle: fromHandleId, // Usa o handle de origem que guardamos
-            targetHandle: targetHandleId, // Conecta na primeira entrada por padrão
+            id: `e-${fromNodeId}-${id}-${Date.now()}`, source: fromNodeId, target: id,
+            sourceHandle: fromHandleId, targetHandle: targetHandleId,
           };
-          // Retorna as edges antigas + a nova
           return [...eds, newEdge];
         });
-         // A normalização será feita pelo useEffect [edges]
       }
-      setPendingConnect(null); // Limpa o estado pendente DEPOIS de usar
+      setPendingConnect(null);
     } else {
-      // Adiciona no centro se não veio de conexão pendente
       const center = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
       newNodePosition = screenToFlowPosition(center);
       newNode.position = newNodePosition;
-      setNodes((nds) => [...nds, newNode]); // Adiciona (normalização via useEffect)
+      setNodes((nds) => [...nds, newNode]);
     }
-    setIsModalOpen(false); // Fecha o modal
-  }, [nodePalette, pendingConnect, screenToFlowPosition, edges, setNodes, setEdges]); // Inclui setNodes/setEdges
-
+    setIsModalOpen(false);
+  }, [nodePalette, pendingConnect, screenToFlowPosition, edges, setNodes, setEdges]);
 
   const del = useKeyPress('Delete');
   const bsp = useKeyPress('Backspace');
@@ -274,8 +296,6 @@ export default function FlowInner() {
     const selectedNodeIds = new Set(selectedNodes);
     const selectedEdgeIds = new Set(selectedEdges);
 
-    // IMPORTANTE: A normalização agora acontece automaticamente no useEffect [edges]
-    // então só precisamos remover os itens selecionados.
     setEdges((eds) => eds.filter(e =>
         !selectedEdgeIds.has(e.id) &&
         !selectedNodeIds.has(e.source) &&
@@ -296,7 +316,6 @@ export default function FlowInner() {
   });
 
   const handleCloseModal = useCallback(() => {
-    // Limpa refs e estado se o modal for fechado sem escolher
     connectingNodeId.current = null;
     connectingHandleId.current = null;
     setPendingConnect(null);
@@ -316,7 +335,7 @@ export default function FlowInner() {
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
-            onConnectStart={onConnectStart} // Adiciona o handler onConnectStart
+            onConnectStart={onConnectStart}
             onConnectEnd={onConnectEnd}
             onPaneClick={onPaneClick}
             fitView
