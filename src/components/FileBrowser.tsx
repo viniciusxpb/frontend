@@ -1,7 +1,5 @@
 // viniciusxpb/frontend/frontend-e2ff74bfb8b04c2182486c99304ae2e139575034/src/components/FileBrowser.tsx
 import React, { useState, useEffect, useCallback } from 'react';
-import { useWsClient } from '@/hooks/useWsClient';
-import { buildWsUrl } from '@/utils/wsUrl';
 
 // Definindo a estrutura da entrada que vem do Rust
 interface DirectoryEntry {
@@ -18,78 +16,114 @@ interface FileBrowserProps {
 }
 
 export function FileBrowser({ onSelectPath, initialPath, isFolderPicker }: FileBrowserProps) {
-    const [currentPath, setCurrentPath] = useState(initialPath || '.');
+    const [currentPath, setCurrentPath] = useState(initialPath || 'C:\\');
     const [entries, setEntries] = useState<DirectoryEntry[]>([]);
-    const [isLoading, setIsLoading] = useState(false);
-    const WS_URL = buildWsUrl();
-    const client = useWsClient(WS_URL, { heartbeatMs: 0, debug: false });
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
-    // Função para enviar o comando de navegação ao Maestro (Rust)
-    const sendBrowseCommand = useCallback((path: string) => {
-        // Sanatiza o path: se vazio, usa "." (diretório atual)
-        const sanitizedPath = path.trim() === '..' ? '..' : path.trim() || '.';
-        
-        if (!client.send) return;
+    // Função para buscar os arquivos/diretórios via HTTP
+    const fetchDirectoryContents = useCallback(async (path: string) => {
         setIsLoading(true);
-        const command = {
-            type: 'BROWSE_PATH',
-            path: sanitizedPath,
-            request_id: `req-${Date.now()}` // Para rastrear
-        };
-        client.send(JSON.stringify(command));
-    }, [client]);
+        setError(null);
+        
+        try {
+            console.log(`[FileBrowser] 📡 Buscando conteúdo do diretório: ${path}`);
+            
+            const response = await fetch('http://localhost:3011/run', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ path: path }),
+            });
 
-    // Efeito para iniciar a navegação no caminho inicial
-    useEffect(() => {
-        sendBrowseCommand(currentPath);
-    }, [currentPath, sendBrowseCommand]);
+            if (!response.ok) {
+                throw new Error(`Erro HTTP: ${response.status}`);
+            }
 
-    // Efeito para receber e processar a resposta do Maestro
-    useEffect(() => {
-        if (client.lastJson && (client.lastJson as any)?.type === 'FS_BROWSE_RESULT') {
-            const payload = (client.lastJson as any);
-            setCurrentPath(payload.current_path);
-            setEntries(payload.entries);
+            const data = await response.json();
+            console.log(`[FileBrowser] ✅ Resposta recebida. ${data.entries?.length || 0} entradas.`);
+            
+            // Atualiza o caminho atual e as entradas
+            setCurrentPath(data.current_path || path);
+            setEntries(data.entries || []);
+            
+        } catch (err) {
+            console.error('[FileBrowser] ❌ Erro ao buscar diretório:', err);
+            setError(`Falha ao carregar diretório: ${err instanceof Error ? err.message : 'Erro desconhecido'}`);
+            setEntries([]);
+        } finally {
             setIsLoading(false);
         }
-    }, [client.lastJson]);
+    }, []);
+
+    // Efeito para carregar o diretório inicial quando o componente monta
+    useEffect(() => {
+        fetchDirectoryContents(initialPath || 'C:\\');
+    }, [initialPath, fetchDirectoryContents]);
 
     const handleEntryClick = useCallback((entry: DirectoryEntry) => {
         if (entry.is_dir) {
-            // Se for pasta ou "..", muda o caminho e recarrega
-            setCurrentPath(entry.path);
+            console.log(`[FileBrowser] ➡️ Navegando para: ${entry.path}`);
+            fetchDirectoryContents(entry.path);
         } else if (!isFolderPicker) {
-            // Se for seletor de arquivos e clicou em arquivo, seleciona e fecha.
             onSelectPath(entry.path);
         }
-    }, [isFolderPicker, onSelectPath]);
-    
+    }, [isFolderPicker, onSelectPath, fetchDirectoryContents]);
+
     // Simplesmente seleciona a pasta atual
     const handleSelectCurrent = useCallback(() => {
+        console.log(`[FileBrowser] ✅ Selecionado o caminho atual: ${currentPath}`);
         onSelectPath(currentPath);
     }, [currentPath, onSelectPath]);
+
+    // Botão para recarregar o diretório atual
+    const handleReload = useCallback(() => {
+        fetchDirectoryContents(currentPath);
+    }, [currentPath, fetchDirectoryContents]);
 
     // Renderização no estilo hacker
     return (
         <div style={{ padding: '8px', minHeight: '300px' }}>
             <div style={{ marginBottom: '8px', fontSize: '14px', color: '#00ff99' }}>
-                Caminho: {isLoading ? 'Conectando ao disco...' : currentPath}
+                Caminho: {isLoading ? `Carregando...` : currentPath}
             </div>
 
-            {isFolderPicker && (
+            <div style={{ marginBottom: '10px', display: 'flex', gap: '8px' }}>
+                {isFolderPicker && (
+                    <button 
+                        className="hacker-btn nodrag"
+                        onClick={handleSelectCurrent} 
+                        disabled={isLoading}
+                    >
+                        ✅ Selecionar esta pasta
+                    </button>
+                )}
                 <button 
                     className="hacker-btn nodrag"
-                    onClick={handleSelectCurrent} 
+                    onClick={handleReload} 
                     disabled={isLoading}
-                    style={{ marginBottom: '10px' }}
                 >
-                    ✅ Selecionar esta pasta
+                    🔄 Atualizar
                 </button>
+            </div>
+
+            {error && (
+                <div style={{ 
+                    color: '#ff4444', 
+                    backgroundColor: 'rgba(255, 0, 0, 0.1)', 
+                    padding: '8px', 
+                    marginBottom: '10px',
+                    border: '1px solid #ff4444',
+                    fontSize: '12px'
+                }}>
+                    ❌ {error}
+                </div>
             )}
 
             {isLoading ? (
                 <div style={{ opacity: 0.8, padding: '20px', textAlign: 'center' }}>
-                    Aguardando resposta do Node de Serviço...
+                    Buscando arquivos e diretórios...
                 </div>
             ) : (
                 <div style={{ maxHeight: '250px', overflowY: 'auto', border: '1px solid #1f5329', padding: '4px' }}>
@@ -113,11 +147,17 @@ export function FileBrowser({ onSelectPath, initialPath, isFolderPicker }: FileB
                             onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(0, 77, 51, 0.2)'; }}
                             onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
                         >
-                            <span>{entry.name === '..' ? '⬆️' : entry.is_dir ? '📁' : '📄'} {entry.name}</span>
-                            <span style={{ opacity: 0.5, fontSize: '10px' }}>{entry.modified.substring(0, 10)}</span>
+                            <span>
+                                {entry.name === '..' ? '⬆️' : entry.is_dir ? '📁' : '📄'} {entry.name}
+                            </span>
+                            <span style={{ opacity: 0.5, fontSize: '10px' }}>
+                                {entry.modified ? entry.modified.substring(0, 10) : ''}
+                            </span>
                         </div>
                     ))}
-                    {entries.length === 0 && <div style={{ opacity: 0.5, padding: '10px' }}>Pasta vazia ou erro de acesso.</div>}
+                    {entries.length === 0 && !error && (
+                        <div style={{ opacity: 0.5, padding: '10px' }}>Pasta vazia</div>
+                    )}
                 </div>
             )}
         </div>

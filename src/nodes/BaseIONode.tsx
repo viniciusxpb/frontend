@@ -26,18 +26,14 @@ export interface BaseNodeData {
 type BaseProps = NodeProps<BaseNodeData> & { children?: React.ReactNode };
 
 export function BaseIONode({ id, data, children }: BaseProps) {
-  console.log(`\n[BaseIONode ${id}] ========== RENDER START ==========`);
-  console.log(`[BaseIONode ${id}] data.value:`, data.value);
-  console.log(`[BaseIONode ${id}] data.onChange exists:`, !!data.onChange);
-  console.log(`[BaseIONode ${id}] data.onChange type:`, typeof data.onChange);
-
+  // Logs de renderização removidos para focar no fluxo de WS
   const connection = useConnection();
   const isTargetOrigin = connection.inProgress && connection.fromNode?.id === id;
 
   const inCount = 1;
   const outCount = 1;
   const inOffsetY = 0;
-  const outOffsetY = 0;
+  const outOffsetY = 0; // FIX LENDÁRIO: Variável reintroduzida com 'const'
 
   // Encontra o primeiro campo de input que aceita valor (text ou selector)
   const renderableField = useMemo(() => {
@@ -49,10 +45,7 @@ export function BaseIONode({ id, data, children }: BaseProps) {
   }, [data.input_fields]);
 
   const showValueInput = !!renderableField;
-  console.log(`[BaseIONode ${id}] showValueInput:`, showValueInput);
-  console.log(`[BaseIONode ${id}] Renderable field type:`, renderableField?.type);
-  console.log(`[BaseIONode ${id}] ========== RENDER END ==========\n`);
-
+  
   // Função para renderizar o controle de input
   const renderInputControl = (field: InputField) => {
     const isSelector = field.type === 'selector';

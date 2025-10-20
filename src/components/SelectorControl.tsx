@@ -1,7 +1,7 @@
-// viniciusxpb/frontend/frontend-e2ff74bfb8b04c2182486c99304ae2e139575034/src/components/SelectorControl.tsx
+// viniciusxpb/frontend/frontend-e2ff74bfb8b04c2182439369a/src/components/SelectorControl.tsx
 import React, { useRef, useCallback, useState } from 'react';
 import HackerModal from '@/components/HackerModal';
-import { FileBrowser } from '@/components/FileBrowser'; // Importa o componente que acabamos de criar
+import { FileBrowser } from '@/components/FileBrowser';
 
 type SelectorProps = {
   id: string;
@@ -22,14 +22,16 @@ export function SelectorControl({ id, name, value, onChange, isFolderSelector, p
 
   // Lógica de seleção por modal
   const handleSelectPath = useCallback((path: string) => {
+    console.log(`[SelectorControl:${id}] ✅ Caminho Selecionado na Modal: ${path}`);
     onChange(id, path);
     setIsBrowserOpen(false); // Fecha a modal após a seleção
   }, [id, onChange]);
   
-  // Lógica de fallback para input file (seletor nativo - não usado no FileBrowser, mas mantido por segurança)
+  // Lógica de fallback para input file (não usada, mas mantida)
   const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedPath = e.target.value;
     if (selectedPath) {
+      console.log(`[SelectorControl:${id}] ⚠️ Fallback Selecionado: ${selectedPath}`);
       onChange(id, selectedPath);
     }
     if (fileInputRef.current) {
@@ -38,9 +40,9 @@ export function SelectorControl({ id, name, value, onChange, isFolderSelector, p
   }, [id, onChange]);
 
   const triggerFileSelect = useCallback(() => {
-    // Abre a modal de navegação
+    console.log(`[SelectorControl:${id}] 🟡 Clique no 📁: Abrindo Modal FileBrowser`);
     setIsBrowserOpen(true);
-  }, []);
+  }, [id]);
   
   // Estilos
   const inputStyle: React.CSSProperties = {
@@ -75,6 +77,9 @@ export function SelectorControl({ id, name, value, onChange, isFolderSelector, p
     cursor: 'pointer',
     userSelect: 'none',
   };
+
+  // LÓGICA LENDÁRIA: Se for seletor de pasta (isFolderSelector) e o valor for vazio, use C:\ como padrão.
+  const defaultPath = isFolderSelector ? 'C:\\' : '.';
 
   return (
     <>
@@ -122,12 +127,16 @@ export function SelectorControl({ id, name, value, onChange, isFolderSelector, p
       {/* Modal que contém o navegador de arquivos */}
       <HackerModal
         open={isBrowserOpen} 
-        onClose={() => setIsBrowserOpen(false)}
+        onClose={() => {
+            console.log(`[SelectorControl:${id}] 🟡 Modal Fechada`);
+            setIsBrowserOpen(false);
+        }}
         title={`📁 Navegar: ${name}`}
       >
         <FileBrowser
           onSelectPath={handleSelectPath}
-          initialPath={value || '.'}
+          // CORREÇÃO: Usa o valor do node, ou o C:\ se o valor estiver vazio
+          initialPath={value || defaultPath} 
           isFolderPicker={isFolderSelector}
         />
       </HackerModal>
