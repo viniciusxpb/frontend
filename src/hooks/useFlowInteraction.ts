@@ -49,7 +49,7 @@ export function useFlowInteraction({
     return `n${maxId + 1}`;
   }, [nodes]);
 
-  const onConnectStart = useCallback((_: any, { nodeId, handleId }: { nodeId: string | null, handleId: string | null }) => {
+  const onConnectStart = useCallback((_event: React.MouseEvent | React.TouchEvent, { nodeId, handleId }: { nodeId: string | null, handleId: string | null }) => {
     connectingNodeId.current = nodeId;
     connectingHandleId.current = handleId;
   }, []);

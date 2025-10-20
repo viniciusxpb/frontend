@@ -9,6 +9,8 @@ import {
     type Connection,
     type NodeChange,
     type EdgeChange,
+    type OnConnectStart,
+    type OnConnectEnd,
     Position
 } from '@xyflow/react';
 import { BaseIONode } from '@/nodes/BaseIONode';
@@ -22,8 +24,8 @@ type FlowCanvasProps = {
     onNodesChange: (changes: NodeChange[]) => void;
     onEdgesChange: (changes: EdgeChange[]) => void;
     onConnect: (connection: Connection) => void;
-    onConnectStart: (event: React.MouseEvent | React.TouchEvent, params: { nodeId: string | null; handleId: string | null; handleType?: string | undefined; }) => void;
-    onConnectEnd: (event: MouseEvent | TouchEvent) => void;
+    onConnectStart: OnConnectStart;
+    onConnectEnd: OnConnectEnd;
     onPaneClick: (event: React.MouseEvent) => void;
     panelPos: { x: number; y: number } | null;
     setPanelPos: React.Dispatch<React.SetStateAction<{ x: number; y: number } | null>>;
