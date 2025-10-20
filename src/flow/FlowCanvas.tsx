@@ -12,7 +12,7 @@ import {
     Position
 } from '@xyflow/react';
 import { BaseIONode } from '@/nodes/BaseIONode';
-import { FsBrowserNode } from '@/nodes/FsBrowserNode'; // <<<--- IMPORTADO
+import { FsBrowserNode } from '@/nodes/FsBrowserNode';
 import { type NodePaletteItem } from '@/nodes/registry';
 
 type FlowCanvasProps = {
@@ -29,6 +29,9 @@ type FlowCanvasProps = {
     setPanelPos: React.Dispatch<React.SetStateAction<{ x: number; y: number } | null>>;
 };
 
+// *** CLASSE CSS PARA IGNORAR O SCROLL/ZOOM DO FLOW ***
+const NO_WHEEL_CLASS = 'prevent-flow-scroll'; // <<<<==== DEFINIDO AQUI TAMBÉM
+
 export function FlowCanvas({
     nodes, edges, nodePalette, onNodesChange, onEdgesChange,
     onConnect, onConnectStart, onConnectEnd, onPaneClick,
@@ -38,16 +41,15 @@ export function FlowCanvas({
     const dynamicNodeTypes: NodeTypes = useMemo(() => {
         const types: NodeTypes = {};
         nodePalette.forEach(item => {
-            // Condição para usar o componente correto
             if (item.type === 'fsBrowser') {
-                types[item.type] = FsBrowserNode; // Nó customizado
+                types[item.type] = FsBrowserNode;
             } else {
-                types[item.type] = BaseIONode; // Nó genérico padrão
+                types[item.type] = BaseIONode;
             }
         });
-        types['default'] = BaseIONode; // Fallback para tipos desconhecidos
+        types['default'] = BaseIONode;
         return types;
-    }, [nodePalette]); // A dependência continua correta
+    }, [nodePalette]);
 
     return (
         <div className="mainBoard">
@@ -55,7 +57,7 @@ export function FlowCanvas({
                 colorMode="dark"
                 nodes={nodes}
                 edges={edges}
-                nodeTypes={dynamicNodeTypes} // Usa os tipos de nós dinâmicos
+                nodeTypes={dynamicNodeTypes}
                 onNodesChange={onNodesChange}
                 onEdgesChange={onEdgesChange}
                 onConnect={onConnect}
@@ -65,6 +67,8 @@ export function FlowCanvas({
                 fitView
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 onInit={(instance: any) => ((window as any).reactFlowInstance = instance)}
+                // *** PROP ADICIONADA AQUI ***
+                noWheelClassName={NO_WHEEL_CLASS} // <<<<==== PASSANDO A CLASSE PARA O REACT FLOW
             >
                 {panelPos && (
                     <Panel style={{ left: panelPos.x, top: panelPos.y, position: 'absolute' }}>
