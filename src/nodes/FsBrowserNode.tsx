@@ -75,6 +75,19 @@ export function FsBrowserNode({ id, data }: NodeProps<FsBrowserNodeData>) {
         }
     }, [currentPath, fetchDirectoryContents, isLoading, currentListedPath]);
 
+    // Handler para voltar uma pasta acima
+    const handleGoUp = useCallback(() => {
+        const pathParts = currentPath.split('\\').filter(p => p);
+        if (pathParts.length > 1) {
+            const parentPath = pathParts.slice(0, -1).join('\\') + '\\';
+            console.log(`[FsBrowserNode:${id}] ⬆️ Voltando para: ${parentPath}`);
+            setCurrentPath(parentPath);
+        } else if (pathParts.length === 1) {
+            const rootPath = pathParts[0] + '\\';
+            console.log(`[FsBrowserNode:${id}] ⬆️ Já está na raiz: ${rootPath}`);
+        }
+    }, [currentPath, id]);
+
     // Handler para clique nas entradas da lista
     const handleEntryClick = useCallback((entry: DirectoryEntry) => {
         if (entry.is_dir) {
@@ -103,7 +116,7 @@ export function FsBrowserNode({ id, data }: NodeProps<FsBrowserNodeData>) {
     const folderStyle: React.CSSProperties = { cursor: 'pointer' };
     const fileStyle: React.CSSProperties = { opacity: 0.8, cursor: 'default' };
     const handleBaseStyle: React.CSSProperties = {
-        position: 'absolute', right: '-10px', top: '50%',
+        position: 'absolute', right: '2px', top: '50%',
         transform: 'translateY(-50%)', width: '8px', height: '8px',
         background: '#00ff99', border: '1px solid #005e38',
         borderRadius: '50%', cursor: 'crosshair',
@@ -115,31 +128,50 @@ export function FsBrowserNode({ id, data }: NodeProps<FsBrowserNodeData>) {
         <div className="hacker-node" style={{ minWidth: '350px' }}>
             <strong>{data.label ?? 'Navegador de Arquivos'}</strong>
 
-            <div style={{
-                marginTop: '6px',
-                padding: '4px 6px',
-                background: 'rgba(0, 255, 153, 0.1)',
-                border: '1px solid rgba(0, 255, 153, 0.2)',
-                borderRadius: '2px',
-                fontSize: '11px',
-                fontFamily: 'monospace',
-                color: '#00ff99',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap'
-            }}>
-                📁 {currentPath}
+            <div style={{ display: 'flex', gap: '4px', marginTop: '6px', alignItems: 'center' }}>
+                <button
+                    onClick={handleGoUp}
+                    className="nodrag"
+                    style={{
+                        padding: '4px 8px',
+                        background: 'rgba(0, 255, 153, 0.15)',
+                        border: '1px solid rgba(0, 255, 153, 0.3)',
+                        borderRadius: '2px',
+                        color: '#00ff99',
+                        cursor: 'pointer',
+                        fontSize: '11px',
+                        fontWeight: 'bold',
+                        transition: 'background 0.15s ease'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(0, 255, 153, 0.25)'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(0, 255, 153, 0.15)'}
+                >
+                    ⬆️
+                </button>
+                <div style={{
+                    flex: 1,
+                    padding: '4px 6px',
+                    background: 'rgba(0, 255, 153, 0.1)',
+                    border: '1px solid rgba(0, 255, 153, 0.2)',
+                    borderRadius: '2px',
+                    fontSize: '11px',
+                    fontFamily: 'monospace',
+                    color: '#00ff99',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap'
+                }}>
+                    📁 {currentPath}
+                </div>
             </div>
 
             {isLoading && <div style={{ fontSize: '11px', opacity: 0.7, marginTop: '5px' }}>Carregando...</div>}
             {error && <div style={{ fontSize: '11px', color: '#ff4444', marginTop: '5px' }}>Erro: {error}</div>}
 
             {!isLoading && !error && entries.length > 0 && (
-                // *** ADICIONADO className={`${NO_WHEEL_CLASS} nodrag`} ***
-                // *** REMOVIDO onWheel ***
                 <div
                     style={listStyle}
-                    className={`${NO_WHEEL_CLASS} nodrag`} // <<<<==== CLASSE APLICADA AQUI
+                    className={`${NO_WHEEL_CLASS} nodrag`}
                 >
                     {entries.map((entry, index) => {
                         const combinedStyle = {
