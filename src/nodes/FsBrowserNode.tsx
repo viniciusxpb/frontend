@@ -2,7 +2,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import type { NodeProps } from '@xyflow/react';
 import { Handle, Position } from '@xyflow/react';
-import { SelectorControl } from '@/components/SelectorControl';
 import type { BaseNodeData } from './BaseIONode';
 
 // Interface para a resposta do backend node-fs-browser
@@ -31,6 +30,7 @@ export function FsBrowserNode({ id, data }: NodeProps<FsBrowserNodeData>) {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [currentListedPath, setCurrentListedPath] = useState<string | null>(null);
+    const [currentPath, setCurrentPath] = useState<string>('C:\\');
 
     // Função para buscar dados no backend
     const fetchDirectoryContents = useCallback(async (path: string) => {
@@ -68,41 +68,33 @@ export function FsBrowserNode({ id, data }: NodeProps<FsBrowserNodeData>) {
         }
     }, [id]);
 
-    // Busca o conteúdo quando 'data.value' (caminho) muda
+    // Busca o conteúdo inicial em C:\ e quando currentPath muda
     useEffect(() => {
-        if (data.value && data.value !== currentListedPath && !isLoading) {
-            fetchDirectoryContents(data.value);
-        } else if (!data.value && currentListedPath) {
-             setEntries([]);
-             setCurrentListedPath(null);
+        if (currentPath && currentPath !== currentListedPath && !isLoading) {
+            fetchDirectoryContents(currentPath);
         }
-    }, [data.value, fetchDirectoryContents, isLoading, currentListedPath]);
-
-    // Pega a função onChange do FlowController
-    const handlePathChange = useCallback((nodeId: string, newValue: string) => {
-        if (data.onChange) {
-            data.onChange(nodeId, newValue);
-        }
-    }, [data.onChange]);
+    }, [currentPath, fetchDirectoryContents, isLoading, currentListedPath]);
 
     // Handler para clique nas entradas da lista
     const handleEntryClick = useCallback((entry: DirectoryEntry) => {
         if (entry.is_dir) {
             console.log(`[FsBrowserNode:${id}] ➡️ Navegando para pasta: ${entry.path}`);
-            handlePathChange(id, entry.path);
+            setCurrentPath(entry.path);
         } else {
             console.log(`[FsBrowserNode:${id}] 📄 Arquivo clicado (sem ação): ${entry.name}`);
         }
-    }, [id, handlePathChange]);
+    }, [id]);
 
     // Estilos
     const listStyle: React.CSSProperties = {
         maxHeight: '200px', overflowY: 'auto', marginTop: '8px',
         border: '1px solid rgba(0, 255, 153, 0.2)', padding: '4px',
         fontSize: '11px', background: 'rgba(0, 0, 0, 0.2)',
+        overflowX: 'hidden',
+        position: 'relative'
     };
     const entryStyleBase: React.CSSProperties = {
-        position: 'relative', padding: '3px 6px', display: 'flex',
+        position: 'relative', padding: '3px 16px 3px 6px', display: 'flex',
         alignItems: 'center', justifyContent: 'space-between',
         borderBottom: '1px dotted rgba(0, 255, 153, 0.1)', minHeight: '22px',
         userSelect: 'none',
@@ -115,22 +107,28 @@ export function FsBrowserNode({ id, data }: NodeProps<FsBrowserNodeData>) {
         transform: 'translateY(-50%)', width: '8px', height: '8px',
         background: '#00ff99', border: '1px solid #005e38',
         borderRadius: '50%', cursor: 'crosshair',
-        zIndex: 10
+        zIndex: 1,
+        pointerEvents: 'auto'
     };
 
     return (
         <div className="hacker-node" style={{ minWidth: '350px' }}>
-            <strong>{data.label ?? 'Navegador'}</strong>
+            <strong>{data.label ?? 'Navegador de Arquivos'}</strong>
 
-            <div style={{ marginTop: '4px' }}>
-                <SelectorControl
-                    id={id}
-                    name="path"
-                    value={data.value ?? ''}
-                    onChange={handlePathChange}
-                    isFolderSelector={true}
-                    placeholder="Escolha uma pasta..."
-                />
+            <div style={{
+                marginTop: '6px',
+                padding: '4px 6px',
+                background: 'rgba(0, 255, 153, 0.1)',
+                border: '1px solid rgba(0, 255, 153, 0.2)',
+                borderRadius: '2px',
+                fontSize: '11px',
+                fontFamily: 'monospace',
+                color: '#00ff99',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap'
+            }}>
+                📁 {currentPath}
             </div>
 
             {isLoading && <div style={{ fontSize: '11px', opacity: 0.7, marginTop: '5px' }}>Carregando...</div>}
@@ -169,7 +167,7 @@ export function FsBrowserNode({ id, data }: NodeProps<FsBrowserNodeData>) {
                      })}
                 </div>
             )}
-             {!isLoading && !error && entries.length === 0 && data.value && (
+             {!isLoading && !error && entries.length === 0 && currentPath && (
                 <div style={{ fontSize: '11px', opacity: 0.5, marginTop: '5px' }}>(Pasta vazia ou sem permissão)</div>
             )}
         </div>
