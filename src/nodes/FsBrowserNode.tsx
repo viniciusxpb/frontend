@@ -100,11 +100,9 @@ export function FsBrowserNode({ id, data }: NodeProps<FsBrowserNodeData>) {
 
     // Estilos
     const listStyle: React.CSSProperties = {
-        maxHeight: '200px', overflowY: 'auto', marginTop: '8px',
+        marginTop: '8px',
         border: '1px solid rgba(0, 255, 153, 0.2)', padding: '4px',
         fontSize: '11px', background: 'rgba(0, 0, 0, 0.2)',
-        overflowX: 'hidden',
-        position: 'relative'
     };
     const entryStyleBase: React.CSSProperties = {
         position: 'relative', padding: '3px 16px 3px 6px', display: 'flex',
