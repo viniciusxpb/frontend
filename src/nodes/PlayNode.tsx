@@ -5,7 +5,9 @@ import { BaseIONode, type BaseNodeData } from '@/nodes/BaseIONode';
 type PlayData = BaseNodeData & {
   onPin?: (nodeId: string, label: string) => void;
   onUnpin?: (nodeId: string) => void;
+  onExecute?: (nodeId: string) => void;
   isPinned?: boolean;
+  isExecuting?: boolean;
 };
 
 export function PlayNode(props: NodeProps<PlayData>) {
@@ -18,6 +20,12 @@ export function PlayNode(props: NodeProps<PlayData>) {
     } else {
       data.onPin?.(id, data.label || 'Play');
     }
+  };
+
+  const handleExecute = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    console.log('▶️ Play button clicado para node:', id);
+    data.onExecute?.(id);
   };
 
   return (
@@ -61,8 +69,33 @@ export function PlayNode(props: NodeProps<PlayData>) {
           onChange: data.onChange,
         }}
       >
-        <div style={{ marginTop: 8, opacity: 0.6, fontSize: 10, color: '#888' }}>
-          Entradas: {data.inputsCount ?? 1}
+        <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <button
+            onClick={handleExecute}
+            disabled={data.isExecuting}
+            className="nodrag"
+            style={{
+              padding: '6px 12px',
+              background: data.isExecuting
+                ? 'rgba(255, 255, 0, 0.3)'
+                : 'linear-gradient(135deg, #00ff88 0%, #00cc6a 100%)',
+              border: '1px solid #00ff88',
+              borderRadius: '4px',
+              color: data.isExecuting ? '#ffff00' : '#000',
+              fontWeight: 'bold',
+              fontSize: 12,
+              cursor: data.isExecuting ? 'wait' : 'pointer',
+              boxShadow: data.isExecuting
+                ? '0 0 10px rgba(255, 255, 0, 0.5)'
+                : '0 2px 8px rgba(0, 255, 136, 0.3)',
+              transition: 'all 0.2s ease',
+            }}
+          >
+            {data.isExecuting ? '⏳ Executando...' : '▶️ Executar'}
+          </button>
+          <div style={{ opacity: 0.6, fontSize: 10, color: '#888', textAlign: 'center' }}>
+            Entradas: {data.inputsCount ?? 1}
+          </div>
         </div>
       </BaseIONode>
     </div>

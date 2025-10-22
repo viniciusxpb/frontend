@@ -22,7 +22,7 @@ export default function FlowController({ onReassignNodeData }: FlowControllerPro
   const nodePalette = useNodePalette();
   const { nodes, edges, setNodes, setEdges, onNodesChange, onEdgesChange, onConnect } = useFlowStateSync();
   const { pinnedNodes, pinNode, unpinNode, isPinned } = usePinnedNodes();
-  const { executeWorkflow } = useWorkflowExecution();
+  const { executeWorkflow, executionState } = useWorkflowExecution();
 
   const handleNodeValueChange = useCallback((nodeId: string, value: string) => {
     console.log(`📝 Atualizando node ${nodeId} para valor:`, value);
@@ -43,6 +43,13 @@ export default function FlowController({ onReassignNodeData }: FlowControllerPro
     pinNode(nodeId, label, node.type || 'unknown');
   }, [nodes, pinNode]);
 
+  const handleExecuteFromNode = useCallback((nodeId: string) => {
+    console.log('🚀 Iniciando execução a partir do node:', nodeId);
+    executeWorkflow(nodes, edges, workspaceName);
+  }, [executeWorkflow, nodes, edges, workspaceName]);
+
+  const isExecuting = executionState.status === 'running';
+
   useEffect(() => {
     setNodes(nds => nds.map(node => {
       const isPlayNode = node.type === 'playButton' || node.type === 'comfyPlay';
@@ -55,10 +62,12 @@ export default function FlowController({ onReassignNodeData }: FlowControllerPro
           isPinned: isPinned(node.id),
           onPin: handlePinNode,
           onUnpin: unpinNode,
+          onExecute: handleExecuteFromNode,
+          isExecuting,
         }
       };
     }));
-  }, [pinnedNodes, setNodes, isPinned, handlePinNode, unpinNode]);
+  }, [pinnedNodes, setNodes, isPinned, handlePinNode, unpinNode, handleExecuteFromNode, isExecuting]);
 
   const {
     isModalOpen, panelPos,
@@ -120,6 +129,8 @@ export default function FlowController({ onReassignNodeData }: FlowControllerPro
       <PinnedPlayButtons
         pinnedNodes={pinnedNodesData}
         onUnpin={unpinNode}
+        onExecute={handleExecuteFromNode}
+        isExecuting={isExecuting}
       />
       <div className="globalWrapper">
         <LeftPanel
