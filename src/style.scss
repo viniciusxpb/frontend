@@ -102,3 +102,13 @@ height: 100vh;
   color: #00ff00;
   font-family: "Courier New", monospace;
 }
+
+.react-flow__node.selected {
+  .hacker-node {
+    border-color: $green !important;
+    box-shadow: 0 0 20px rgba(0, 255, 136, 0.8),
+                0 0 40px rgba(0, 255, 136, 0.4),
+                inset 0 0 20px rgba(0, 255, 136, 0.2) !important;
+    background: rgba(0, 255, 0, 0.15) !important;
+  }
+}

@@ -1,5 +1,5 @@
 // src/flow/FlowCanvas.tsx
-import React, { useMemo } from 'react';
+import React, { useMemo, useCallback, useEffect } from 'react';
 import {
     ReactFlow,
     Panel,
@@ -11,7 +11,7 @@ import {
     type EdgeChange,
     type OnConnectStart,
     type OnConnectEnd,
-    Position
+    useReactFlow
 } from '@xyflow/react';
 import { BaseIONode } from '@/nodes/BaseIONode';
 import { FsBrowserNode } from '@/nodes/FsBrowserNode';
@@ -40,6 +40,8 @@ export function FlowCanvas({
     panelPos, setPanelPos
 }: FlowCanvasProps) {
 
+    const { deleteElements } = useReactFlow();
+
     const dynamicNodeTypes: NodeTypes = useMemo(() => {
         const types: NodeTypes = {};
         nodePalette.forEach(item => {
@@ -52,6 +54,26 @@ export function FlowCanvas({
         types['default'] = BaseIONode;
         return types;
     }, [nodePalette]);
+
+    const handleKeyDown = useCallback((event: KeyboardEvent) => {
+        if (event.key === 'Delete' || event.key === 'Backspace') {
+            const selectedNodes = nodes.filter(node => node.selected);
+            const selectedEdges = edges.filter(edge => edge.selected);
+
+            if (selectedNodes.length > 0 || selectedEdges.length > 0) {
+                console.log('🗑️ Deletando elementos selecionados:', {
+                    nodes: selectedNodes.length,
+                    edges: selectedEdges.length
+                });
+                deleteElements({ nodes: selectedNodes, edges: selectedEdges });
+            }
+        }
+    }, [nodes, edges, deleteElements]);
+
+    useEffect(() => {
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [handleKeyDown]);
 
     return (
         <div className="mainBoard">
