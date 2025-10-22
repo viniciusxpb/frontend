@@ -78,21 +78,26 @@ export function useFlowInteraction({
     if (!spec) { setIsModalOpen(false); setPendingConnect(null); return; }
     const id = nextId();
     const baseData: any = JSON.parse(JSON.stringify(spec.default_data ?? {}));
-    
+
     if (!baseData.label) { baseData.label = spec.label; }
-    
-    // 🔥 CORREÇÃO: Usa a função passada do FlowController
+
     baseData.onChange = onNodeValueChange;
-    
+
     baseData.inputsMode = normalizeIOMode(baseData.inputsMode);
     baseData.outputsMode = normalizeIOMode(baseData.outputsMode);
     if (baseData.inputsMode === 'n') baseData.inputsCount = Math.max(baseData.inputsCount ?? 1, 1);
     if (baseData.outputsMode === 'n') baseData.outputsCount = Math.max(baseData.outputsCount ?? 1, 1);
-    
+
     let newNodePosition = { x: 0, y: 0 };
     const newNode: Node = { id, type: spec.type, className: 'hacker-node', position: { x: 0, y: 0 }, data: baseData };
 
-    console.log('🆕 Adicionando novo node:', { id, type: spec.type, currentNodesCount: nodes.length });
+    console.log('🆕 Adicionando novo node:', {
+      id,
+      type: spec.type,
+      currentNodesCount: nodes.length,
+      input_fields: baseData.input_fields,
+      hasInputFields: !!baseData.input_fields
+    });
 
     if (pendingConnect) {
       newNodePosition = pendingConnect.pos;

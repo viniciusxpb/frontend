@@ -35,14 +35,22 @@ export function BaseIONode({ id, data, children }: BaseProps) {
   const inOffsetY = 0;
   const outOffsetY = 0; // FIX LENDÁRIO: Variável reintroduzida com 'const'
 
-  // Encontra o primeiro campo de input que aceita valor (text ou selector)
   const renderableField = useMemo(() => {
+    console.log(`🔍 [BaseIONode ${id}] Checking input_fields:`, {
+      hasInputFields: !!data.input_fields,
+      isArray: Array.isArray(data.input_fields),
+      input_fields: data.input_fields,
+      dataKeys: Object.keys(data)
+    });
+
     if (!data.input_fields || !Array.isArray(data.input_fields)) {
       return undefined;
     }
 
-    return data.input_fields.find((f) => f.type === 'text' || f.type === 'selector');
-  }, [data.input_fields]);
+    const field = data.input_fields.find((f) => f.type === 'text' || f.type === 'selector');
+    console.log(`🎯 [BaseIONode ${id}] Renderable field:`, field);
+    return field;
+  }, [data.input_fields, id, data]);
 
   const showValueInput = !!renderableField;
   
