@@ -15,6 +15,7 @@ import {
 } from '@xyflow/react';
 import { BaseIONode } from '@/nodes/BaseIONode';
 import { FsBrowserNode } from '@/nodes/FsBrowserNode';
+import { PlayNode } from '@/nodes/PlayNode';
 import { type NodePaletteItem } from '@/nodes/registry';
 
 type FlowCanvasProps = {
@@ -47,6 +48,8 @@ export function FlowCanvas({
         nodePalette.forEach(item => {
             if (item.type === 'fsBrowser') {
                 types[item.type] = FsBrowserNode;
+            } else if (item.type === 'playButton' || item.type === 'comfyPlay') {
+                types[item.type] = PlayNode;
             } else {
                 types[item.type] = BaseIONode;
             }

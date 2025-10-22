@@ -1,13 +1,16 @@
 // src/flow/FlowController.tsx
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import type { Node, Edge } from '@xyflow/react';
 import LeftPanel from '@/components/LeftPanel';
 import HackerModal from '@/components/HackerModal';
 import NodeCatalog from '@/components/NodeCatalog';
+import { PinnedPlayButtons } from '@/components/PinnedPlayButtons';
 import { useNodePalette } from '@/hooks/useNodePalette';
 import { useFlowStateSync } from '@/hooks/useFlowStateSync';
 import { useFlowInteraction } from '@/hooks/useFlowInteraction';
 import { useWorkspacePersistence } from '@/hooks/useWorkspacePersistence';
+import { usePinnedNodes } from '@/hooks/usePinnedNodes';
+import { useWorkflowExecution } from '@/hooks/useWorkflowExecution';
 import { FlowCanvas } from './FlowCanvas';
 
 type FlowControllerProps = {
@@ -18,20 +21,44 @@ export default function FlowController({ onReassignNodeData }: FlowControllerPro
   const [workspaceName, setWorkspaceName] = useState('workspace-1');
   const nodePalette = useNodePalette();
   const { nodes, edges, setNodes, setEdges, onNodesChange, onEdgesChange, onConnect } = useFlowStateSync();
-  
-  // 🔥 CORREÇÃO: Função que realmente atualiza os valores dos nós
+  const { pinnedNodes, pinNode, unpinNode, isPinned } = usePinnedNodes();
+  const { executeWorkflow } = useWorkflowExecution();
+
   const handleNodeValueChange = useCallback((nodeId: string, value: string) => {
     console.log(`📝 Atualizando node ${nodeId} para valor:`, value);
-    setNodes(nds => nds.map(node => 
-      node.id === nodeId ? { 
-        ...node, 
-        data: { 
-          ...node.data, 
-          value 
-        } 
+    setNodes(nds => nds.map(node =>
+      node.id === nodeId ? {
+        ...node,
+        data: {
+          ...node.data,
+          value
+        }
       } : node
     ));
   }, [setNodes]);
+
+  const handlePinNode = useCallback((nodeId: string, label: string) => {
+    const node = nodes.find(n => n.id === nodeId);
+    if (!node) return;
+    pinNode(nodeId, label, node.type || 'unknown');
+  }, [nodes, pinNode]);
+
+  useEffect(() => {
+    setNodes(nds => nds.map(node => {
+      const isPlayNode = node.type === 'playButton' || node.type === 'comfyPlay';
+      if (!isPlayNode) return node;
+
+      return {
+        ...node,
+        data: {
+          ...node.data,
+          isPinned: isPinned(node.id),
+          onPin: handlePinNode,
+          onUnpin: unpinNode,
+        }
+      };
+    }));
+  }, [pinnedNodes, setNodes, isPinned, handlePinNode, unpinNode]);
 
   const {
     isModalOpen, panelPos,
@@ -84,10 +111,18 @@ export default function FlowController({ onReassignNodeData }: FlowControllerPro
 
   console.log('🔍 FlowController - nodes count:', nodes.length, 'edges count:', edges.length);
 
+  const pinnedNodesData = nodes.filter(node =>
+    pinnedNodes.some(p => p.nodeId === node.id)
+  );
+
   return (
     <>
+      <PinnedPlayButtons
+        pinnedNodes={pinnedNodesData}
+        onUnpin={unpinNode}
+      />
       <div className="globalWrapper">
-        <LeftPanel 
+        <LeftPanel
           onOpenModal={() => setIsModalOpen(true)}
           nodes={nodes}
           edges={edges}

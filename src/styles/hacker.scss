@@ -241,3 +241,83 @@ $t-slow: 0.2s;
     top: 200%;
   }
 }
+
+/* ==================== */
+/* pinned play buttons  */
+/* ==================== */
+.pinned-play-container {
+  position: fixed;
+  top: $sp-4;
+  right: $sp-4;
+  @include card;
+  min-width: 200px;
+  max-width: 300px;
+  z-index: 1000;
+  box-shadow: $shadow-2;
+}
+
+.pinned-play-header {
+  padding: $sp-3;
+  border-bottom: 1px solid $border-dim;
+  font-size: 14px;
+  font-weight: bold;
+  color: $color-accent;
+}
+
+.pinned-play-nodes {
+  padding: $sp-3;
+  display: flex;
+  flex-direction: column;
+  gap: $sp-3;
+}
+
+.pinned-node-wrapper {
+  position: relative;
+  @include card;
+  padding: $sp-3;
+  transition: all $t-med ease;
+
+  &:hover {
+    box-shadow: 0 0 12px rgba($color: $color-accent, $alpha: 0.4);
+    transform: translateX(-2px);
+  }
+}
+
+.pinned-close-btn {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid $border-dim;
+  background: rgba(0, 0, 0, 0.9);
+  color: color.scale($color-fg, $lightness: -20%);
+  cursor: pointer;
+  transition: all $t-fast ease;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+
+  &:hover {
+    background: rgba(255, 0, 0, 0.8);
+    border-color: #ff3333;
+    color: #fff;
+    transform: scale(1.1);
+  }
+}
+
+.pinned-node-mini {
+  min-width: 120px;
+}
+
+.pinned-node-label {
+  font-family: $font-mono;
+  font-size: 13px;
+  font-weight: bold;
+  color: $color-accent;
+  text-align: center;
+}
