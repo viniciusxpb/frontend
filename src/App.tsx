@@ -6,6 +6,7 @@ import '@/style.scss';
 import { useWsClient } from '@/hooks/useWsClient';
 import { WebSocketStatus } from '@/components/WebSocketStatus';
 import { buildWsUrl } from '@/utils/wsUrl';
+import '@/utils/logger'; // Inicia o logger automaticamente
 
 export default function App() {
   const WS_URL = buildWsUrl();
